@@ -837,4 +837,709 @@ Definition fin8_succ (f: Fin8) : option Fin8 :=
   end.
 
 (** * End of Section 2: Finite Domain Theory *)
+
+(* ========================================================================= *)
+(* SECTION 3: POSITION ABSTRACTION                                          *)
+(* ========================================================================= *)
+
+(** * Concrete Implementation of Position System *)
+
+(** * Rank and File as wrapped Fin8 *)
+
+Record Rank : Type := mkRank { 
+  rank_val : Fin8 
+}.
+
+Record File : Type := mkFile { 
+  file_val : Fin8 
+}.
+
+Record Position : Type := mkPosition {
+  pos_rank : Rank;
+  pos_file : File
+}.
+
+(** * Decidable Equality Instances *)
+
+Lemma rank_eq_dec : forall (r1 r2: Rank), {r1 = r2} + {r1 <> r2}.
+Proof.
+  intros [v1] [v2].
+  destruct (Fin.eq_dec v1 v2).
+  - left. f_equal. exact e.
+  - right. intro H. injection H. contradiction.
+Defined.
+
+Lemma file_eq_dec : forall (f1 f2: File), {f1 = f2} + {f1 <> f2}.
+Proof.
+  intros [v1] [v2].
+  destruct (Fin.eq_dec v1 v2).
+  - left. f_equal. exact e.
+  - right. intro H. injection H. contradiction.
+Defined.
+
+Lemma position_eq_dec : forall (p1 p2: Position), {p1 = p2} + {p1 <> p2}.
+Proof.
+  intros [r1 f1] [r2 f2].
+  destruct (rank_eq_dec r1 r2), (file_eq_dec f1 f2).
+  - left. f_equal; assumption.
+  - right. intro H. injection H. intros. contradiction.
+  - right. intro H. injection H. intros. contradiction.
+  - right. intro H. injection H. intros. contradiction.
+Defined.
+
+#[global]
+Instance rank_decidable_eq : DecidableEq Rank := {
+  dec_eq := rank_eq_dec
+}.
+
+#[global]
+Instance file_decidable_eq : DecidableEq File := {
+  dec_eq := file_eq_dec
+}.
+
+#[global]
+Instance position_decidable_eq : DecidableEq Position := {
+  dec_eq := position_eq_dec
+}.
+
+(** * Construction/Destruction Properties *)
+
+Lemma pos_eta : forall p, 
+  mkPosition (pos_rank p) (pos_file p) = p.
+Proof.
+  intros [r f]. reflexivity.
+Qed.
+
+Lemma pos_beta_rank : forall r f, 
+  pos_rank (mkPosition r f) = r.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma pos_beta_file : forall r f, 
+  pos_file (mkPosition r f) = f.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma position_ext : forall p1 p2,
+  pos_rank p1 = pos_rank p2 ->
+  pos_file p1 = pos_file p2 ->
+  p1 = p2.
+Proof.
+  intros [r1 f1] [r2 f2]. simpl. intros <- <-. reflexivity.
+Qed.
+
+(** * Concrete Rank Values *)
+
+Definition rank1 : Rank := mkRank Fin.F1.
+Definition rank2 : Rank := mkRank (Fin.FS Fin.F1).
+Definition rank3 : Rank := mkRank (Fin.FS (Fin.FS Fin.F1)).
+Definition rank4 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS Fin.F1))).
+Definition rank5 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1)))).
+Definition rank6 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))).
+Definition rank7 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1)))))).
+Definition rank8 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))))).
+
+(** * Concrete File Values *)
+
+Definition fileA : File := mkFile Fin.F1.
+Definition fileB : File := mkFile (Fin.FS Fin.F1).
+Definition fileC : File := mkFile (Fin.FS (Fin.FS Fin.F1)).
+Definition fileD : File := mkFile (Fin.FS (Fin.FS (Fin.FS Fin.F1))).
+Definition fileE : File := mkFile (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1)))).
+Definition fileF : File := mkFile (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))).
+Definition fileG : File := mkFile (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1)))))).
+Definition fileH : File := mkFile (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))))).
+
+(** * Coordinate Arithmetic *)
+
+Open Scope Z_scope.
+
+Definition rankZ (p: Position) : Z :=
+  Z.of_nat (fin8_to_nat (rank_val (pos_rank p))).
+
+Definition fileZ (p: Position) : Z :=
+  Z.of_nat (fin8_to_nat (file_val (pos_file p))).
+
+Definition Z_to_rank (z: Z) : option Rank :=
+  if Z_lt_dec z 0 then None
+  else if Z_lt_dec z 8 then 
+    Some (mkRank (nat_to_fin8_aux (Z.to_nat z)))
+  else None.
+
+Definition Z_to_file (z: Z) : option File :=
+  if Z_lt_dec z 0 then None
+  else if Z_lt_dec z 8 then 
+    Some (mkFile (nat_to_fin8_aux (Z.to_nat z)))
+  else None.
+
+(** * Offset Function *)
+
+Definition offset (p: Position) (dr df: Z) : option Position :=
+  let new_rank := rankZ p + dr in
+  let new_file := fileZ p + df in
+  match Z_to_rank new_rank, Z_to_file new_file with
+  | Some r, Some f => Some (mkPosition r f)
+  | _, _ => None
+  end.
+
+(** * Bounds Properties *)
+
+Lemma rankZ_bounds : forall p, 0 <= rankZ p < 8.
+Proof.
+  intro p. unfold rankZ.
+  pose proof (fin8_to_nat_bound (rank_val (pos_rank p))).
+  split.
+  - lia.
+  - lia.
+Qed.
+
+Lemma fileZ_bounds : forall p, 0 <= fileZ p < 8.
+Proof.
+  intro p. unfold fileZ.
+  pose proof (fin8_to_nat_bound (file_val (pos_file p))).
+  split.
+  - lia.
+  - lia.
+Qed.
+
+(** * Offset Properties *)
+
+Lemma offset_zero : forall p,
+  offset p 0 0 = Some p.
+Proof.
+  intro p.
+  unfold offset.
+  assert (Hr: rankZ p + 0 = rankZ p) by ring.
+  assert (Hf: fileZ p + 0 = fileZ p) by ring.
+  rewrite Hr, Hf.
+  unfold Z_to_rank, Z_to_file.
+  pose proof (rankZ_bounds p) as [Hr1 Hr2].
+  pose proof (fileZ_bounds p) as [Hf1 Hf2].
+  destruct (Z_lt_dec (rankZ p) 0); [lia|].
+  destruct (Z_lt_dec (rankZ p) 8); [|lia].
+  destruct (Z_lt_dec (fileZ p) 0); [lia|].
+  destruct (Z_lt_dec (fileZ p) 8); [|lia].
+  f_equal.
+  unfold rankZ, fileZ in *.
+  destruct p as [r f]. simpl in *.
+  f_equal.
+  - f_equal. destruct r as [rv]. simpl.
+    rewrite Nat2Z.id.
+    apply fin8_exhaustive with (f := rv);
+      (simpl; reflexivity).
+  - f_equal. destruct f as [fv]. simpl.
+    rewrite Nat2Z.id.
+    apply fin8_exhaustive with (f := fv);
+      (simpl; reflexivity).
+Qed.
+
+Lemma offset_inverse : forall p dr df p',
+  offset p dr df = Some p' ->
+  offset p' (-dr) (-df) = Some p.
+Proof.
+  intros p dr df p' H.
+  unfold offset in *.
+  destruct (Z_to_rank (rankZ p + dr)) eqn:Hr; [|discriminate].
+  destruct (Z_to_file (fileZ p + df)) eqn:Hf; [|discriminate].
+  injection H. intro Heq. subst p'. clear H.
+  simpl.
+  unfold Z_to_rank in Hr. unfold Z_to_file in Hf.
+  destruct (Z_lt_dec (rankZ p + dr) 0); [discriminate|].
+  destruct (Z_lt_dec (rankZ p + dr) 8); [|discriminate].
+  destruct (Z_lt_dec (fileZ p + df) 0); [discriminate|].
+  destruct (Z_lt_dec (fileZ p + df) 8); [|discriminate].
+  injection Hr. injection Hf. intros Hf' Hr'. clear Hr Hf.
+  unfold rankZ, fileZ. simpl.
+  assert (Hrz: Z.of_nat (fin8_to_nat (rank_val r)) = rankZ p + dr).
+  { subst r. simpl.
+    assert (Hr8: 0 <= rankZ p + dr < 8) by lia.
+    unfold nat_to_fin8_aux.
+    remember (Z.to_nat (rankZ p + dr)) as nr.
+    assert (Hnr: Z.of_nat nr = rankZ p + dr).
+    { subst nr. rewrite Z2Nat.id; lia. }
+    destruct nr as [|[|[|[|[|[|[|[|n8]]]]]]]]; simpl; try exact Hnr.
+    exfalso. rewrite <- Hnr in Hr8. simpl in Hr8. lia.
+  }
+  assert (Hfz: Z.of_nat (fin8_to_nat (file_val f)) = fileZ p + df).
+  { subst f. simpl.
+    assert (Hf8: 0 <= fileZ p + df < 8) by lia.
+    unfold nat_to_fin8_aux.
+    remember (Z.to_nat (fileZ p + df)) as nf.
+    assert (Hnf: Z.of_nat nf = fileZ p + df).
+    { subst nf. rewrite Z2Nat.id; lia. }
+    destruct nf as [|[|[|[|[|[|[|[|n8]]]]]]]]; simpl; try exact Hnf.
+    exfalso. rewrite <- Hnf in Hf8. simpl in Hf8. lia.
+  }
+  rewrite Hrz, Hfz.
+  replace (rankZ p + dr + - dr) with (rankZ p) by ring.
+  replace (fileZ p + df + - df) with (fileZ p) by ring.
+  unfold offset.
+  unfold Z_to_rank, Z_to_file.
+  pose proof (rankZ_bounds p) as [Hr1 Hr2].
+  pose proof (fileZ_bounds p) as [Hf1 Hf2].
+  destruct (Z_lt_dec (rankZ p) 0); [lia|].
+  destruct (Z_lt_dec (rankZ p) 8); [|lia].
+  destruct (Z_lt_dec (fileZ p) 0); [lia|].
+  destruct (Z_lt_dec (fileZ p) 8); [|lia].
+  f_equal.
+  destruct p as [pr pf]. simpl in *.
+  f_equal.
+  - f_equal. destruct pr as [prv]. simpl.
+    apply fin8_exhaustive with (f := prv);
+      (simpl; reflexivity).
+  - f_equal. destruct pf as [pfv]. simpl.
+    apply fin8_exhaustive with (f := pfv);
+      (simpl; reflexivity).
+Qed.
+
+(** * Offset Composition *)
+
+Lemma Z_to_rank_Some : forall z r,
+  Z_to_rank z = Some r ->
+  0 <= z < 8 /\ r = mkRank (nat_to_fin8_aux (Z.to_nat z)).
+Proof.
+  intros z r H.
+  unfold Z_to_rank in H.
+  destruct (Z_lt_dec z 0); [discriminate|].
+  destruct (Z_lt_dec z 8); [|discriminate].
+  injection H. intro. subst. split; [lia|reflexivity].
+Qed.
+
+Lemma Z_to_file_Some : forall z f,
+  Z_to_file z = Some f ->
+  0 <= z < 8 /\ f = mkFile (nat_to_fin8_aux (Z.to_nat z)).
+Proof.
+  intros z f H.
+  unfold Z_to_file in H.
+  destruct (Z_lt_dec z 0); [discriminate|].
+  destruct (Z_lt_dec z 8); [|discriminate].
+  injection H. intro. subst. split; [lia|reflexivity].
+Qed.
+
+Lemma nat_to_fin8_aux_roundtrip : forall z,
+  0 <= z < 8 ->
+  Z.of_nat (fin8_to_nat (nat_to_fin8_aux (Z.to_nat z))) = z.
+Proof.
+  intros z Hz.
+  remember (Z.to_nat z) as n eqn:Heqn.
+  assert (Hn: Z.of_nat n = z).
+  { subst n. rewrite Z2Nat.id; lia. }
+  assert (Hbound: (n < 8)%nat).
+  { apply Nat2Z.inj_lt. rewrite Hn. lia. }
+  rewrite <- Hn.
+  clear Hz Hn Heqn z.
+  destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; simpl; try reflexivity.
+  exfalso. simpl in Hbound. lia.
+Qed.
+
+Lemma offset_compose : forall p1 p2 p3 dr1 df1 dr2 df2,
+  offset p1 dr1 df1 = Some p2 ->
+  offset p2 dr2 df2 = Some p3 ->
+  offset p1 (dr1 + dr2) (df1 + df2) = Some p3.
+Proof.
+  intros p1 p2 p3 dr1 df1 dr2 df2 H1 H2.
+  unfold offset in *.
+  case_eq (Z_to_rank (rankZ p1 + dr1)); [intros r1 Hr1|intro Hr1]; rewrite Hr1 in H1; [|discriminate].
+  case_eq (Z_to_file (fileZ p1 + df1)); [intros f1 Hf1|intro Hf1]; rewrite Hf1 in H1; [|discriminate].
+  injection H1; intro Hp2; subst p2; clear H1.
+  simpl in H2.
+  case_eq (Z_to_rank (rankZ (mkPosition r1 f1) + dr2)); [intros r2 Hr2|intro Hr2]; rewrite Hr2 in H2; [|discriminate].
+  case_eq (Z_to_file (fileZ (mkPosition r1 f1) + df2)); [intros f2 Hf2|intro Hf2]; rewrite Hf2 in H2; [|discriminate].
+  injection H2; intro Hp3; subst p3; clear H2.
   
+  apply Z_to_rank_Some in Hr1. destruct Hr1 as [Hrbounds1 Hr1eq].
+  apply Z_to_file_Some in Hf1. destruct Hf1 as [Hfbounds1 Hf1eq].
+  apply Z_to_rank_Some in Hr2. destruct Hr2 as [Hrbounds2 Hr2eq].
+  apply Z_to_file_Some in Hf2. destruct Hf2 as [Hfbounds2 Hf2eq].
+  
+  subst r1 f1.
+  unfold rankZ, fileZ in Hr2eq, Hf2eq, Hrbounds2, Hfbounds2. simpl in *.
+  rewrite nat_to_fin8_aux_roundtrip in Hrbounds2, Hfbounds2 by assumption.
+  
+  replace (rankZ p1 + (dr1 + dr2)) with ((rankZ p1 + dr1) + dr2) by ring.
+  replace (fileZ p1 + (df1 + df2)) with ((fileZ p1 + df1) + df2) by ring.
+  
+  unfold Z_to_rank, Z_to_file.
+  destruct (Z_lt_dec ((rankZ p1 + dr1) + dr2) 0).
+  { clear - Hrbounds1 Hrbounds2. lia. }
+  destruct (Z_lt_dec ((rankZ p1 + dr1) + dr2) 8); [|lia].
+  destruct (Z_lt_dec ((fileZ p1 + df1) + df2) 0); [lia|].
+  destruct (Z_lt_dec ((fileZ p1 + df1) + df2) 8); [|lia].
+  
+  subst r2 f2.
+  f_equal. f_equal.
+  - f_equal.
+    unfold rankZ, fileZ. simpl.
+    rewrite nat_to_fin8_aux_roundtrip by assumption.
+    assert (Z.to_nat ((rankZ p1 + dr1) + dr2) < 8)%nat.
+    { apply Nat2Z.inj_lt. rewrite Z2Nat.id; lia. }
+    remember (Z.to_nat ((rankZ p1 + dr1) + dr2)) as n.
+    destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; try reflexivity.
+    exfalso. simpl in H. lia.
+  - f_equal.
+    unfold rankZ, fileZ. simpl.
+    rewrite nat_to_fin8_aux_roundtrip by assumption.
+    assert (Z.to_nat ((fileZ p1 + df1) + df2) < 8)%nat.
+    { apply Nat2Z.inj_lt. rewrite Z2Nat.id; lia. }
+    remember (Z.to_nat ((fileZ p1 + df1) + df2)) as n.
+    destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; try reflexivity.
+    exfalso. simpl in H. lia.
+Qed.
+
+(** * Position Enumeration *)
+
+Definition enum_rank : list Rank :=
+  [rank1; rank2; rank3; rank4; rank5; rank6; rank7; rank8].
+
+Definition enum_file : list File :=
+  [fileA; fileB; fileC; fileD; fileE; fileF; fileG; fileH].
+
+Definition enum_position : list Position :=
+  list_prod enum_rank enum_file |> 
+  map (fun rf => mkPosition (fst rf) (snd rf)).
+
+Lemma enum_rank_complete : forall r, In r enum_rank.
+Proof.
+  intro r. destruct r as [rv].
+  apply fin8_exhaustive with (f := rv);
+    (simpl; tauto).
+Qed.
+
+Lemma enum_file_complete : forall f, In f enum_file.
+Proof.
+  intro f. destruct f as [fv].
+  apply fin8_exhaustive with (f := fv);
+    (simpl; tauto).
+Qed.
+
+Lemma enum_position_complete : forall p, In p enum_position.
+Proof.
+  intro p. destruct p as [r f].
+  unfold enum_position.
+  apply in_map.
+  apply in_prod.
+  - apply enum_rank_complete.
+  - apply enum_file_complete.
+Qed.
+
+Lemma enum_rank_NoDup : NoDup enum_rank.
+Proof.
+  unfold enum_rank.
+  repeat constructor; simpl; intuition;
+    (injection H || injection H0 || injection H1 || injection H2 ||
+     injection H3 || injection H4 || injection H5); intro; 
+    repeat match goal with 
+    | H: Fin.FS _ = Fin.F1 |- _ => discriminate H
+    | H: Fin.F1 = Fin.FS _ |- _ => discriminate H
+    | H: Fin.FS ?x = Fin.FS ?y |- _ => 
+        apply Fin.FS_inj in H
+    end.
+Qed.
+
+Lemma enum_file_NoDup : NoDup enum_file.
+Proof.
+  unfold enum_file.
+  repeat constructor; simpl; intuition;
+    (injection H || injection H0 || injection H1 || injection H2 ||
+     injection H3 || injection H4 || injection H5); intro;
+    repeat match goal with 
+    | H: Fin.FS _ = Fin.F1 |- _ => discriminate H
+    | H: Fin.F1 = Fin.FS _ |- _ => discriminate H
+    | H: Fin.FS ?x = Fin.FS ?y |- _ => 
+        apply Fin.FS_inj in H
+    end.
+Qed.
+
+Lemma enum_position_NoDup : NoDup enum_position.
+Proof.
+  unfold enum_position.
+  apply NoDup_map.
+  - intros [r1 f1] [r2 f2] _ _ H. simpl in H.
+    injection H. intros. f_equal; assumption.
+  - apply NoDup_list_prod.
+    + apply enum_rank_NoDup.
+    + apply enum_file_NoDup.
+Qed.
+
+(** * Finite Instance *)
+
+#[global]
+Instance rank_finite : Finite Rank := {
+  enum := enum_rank;
+  enum_complete := enum_rank_complete;
+  enum_nodup := enum_rank_NoDup
+}.
+
+#[global]
+Instance file_finite : Finite File := {
+  enum := enum_file;
+  enum_complete := enum_file_complete;
+  enum_nodup := enum_file_NoDup
+}.
+
+#[global]
+Instance position_finite : Finite Position := {
+  enum := enum_position;
+  enum_complete := enum_position_complete;
+  enum_nodup := enum_position_NoDup
+}.
+
+(** * Algebraic Notation Support *)
+
+Definition file_to_char (f: File) : string :=
+  match fin8_to_nat (file_val f) with
+  | 0 => "a"
+  | 1 => "b"
+  | 2 => "c"
+  | 3 => "d"
+  | 4 => "e"
+  | 5 => "f"
+  | 6 => "g"
+  | _ => "h"
+  end.
+
+Definition rank_to_char (r: Rank) : string :=
+  match fin8_to_nat (rank_val r) with
+  | 0 => "1"
+  | 1 => "2"
+  | 2 => "3"
+  | 3 => "4"
+  | 4 => "5"
+  | 5 => "6"
+  | 6 => "7"
+  | _ => "8"
+  end.
+
+Definition position_to_algebraic (p: Position) : string :=
+  file_to_char (pos_file p) ++ rank_to_char (pos_rank p).
+
+Definition char_to_file (c: string) : option File :=
+  match c with
+  | "a" => Some fileA
+  | "b" => Some fileB
+  | "c" => Some fileC
+  | "d" => Some fileD
+  | "e" => Some fileE
+  | "f" => Some fileF
+  | "g" => Some fileG
+  | "h" => Some fileH
+  | _ => None
+  end.
+
+Definition char_to_rank (c: string) : option Rank :=
+  match c with
+  | "1" => Some rank1
+  | "2" => Some rank2
+  | "3" => Some rank3
+  | "4" => Some rank4
+  | "5" => Some rank5
+  | "6" => Some rank6
+  | "7" => Some rank7
+  | "8" => Some rank8
+  | _ => None
+  end.
+
+(** * Offset Preservation Properties *)
+
+Lemma offset_preserves_board_validity : forall p dr df p',
+  offset p dr df = Some p' ->
+  rankZ p' = rankZ p + dr /\
+  fileZ p' = fileZ p + df /\
+  0 <= rankZ p' < 8 /\
+  0 <= fileZ p' < 8.
+Proof.
+  intros p dr df p' H.
+  unfold offset in H.
+  destruct (Z_to_rank (rankZ p + dr)) eqn:Hr; [|discriminate].
+  destruct (Z_to_file (fileZ p + df)) eqn:Hf; [|discriminate].
+  injection H. intro. subst p'. clear H.
+  split; [|split; [|split]].
+  - unfold rankZ. simpl. unfold Z_to_rank in Hr.
+    destruct (Z_lt_dec (rankZ p + dr) 0); [discriminate|].
+    destruct (Z_lt_dec (rankZ p + dr) 8); [|discriminate].
+    injection Hr. intro. rewrite <- H. clear H Hr.
+    unfold rank_val. simpl. rewrite Nat2Z.id.
+    assert (0 <= rankZ p + dr < 8) by lia.
+    remember (Z.to_nat (rankZ p + dr)) as n.
+    assert (Z.of_nat n = rankZ p + dr).
+    { rewrite <- Heqn. rewrite Z2Nat.id; lia. }
+    rewrite <- H0.
+    clear - H.
+    destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; reflexivity || (exfalso; simpl in H; lia).
+  - unfold fileZ. simpl. unfold Z_to_file in Hf.
+    destruct (Z_lt_dec (fileZ p + df) 0); [discriminate|].
+    destruct (Z_lt_dec (fileZ p + df) 8); [|discriminate].
+    injection Hf. intro. rewrite <- H. clear H Hf.
+    unfold file_val. simpl. rewrite Nat2Z.id.
+    assert (0 <= fileZ p + df < 8) by lia.
+    remember (Z.to_nat (fileZ p + df)) as n.
+    assert (Z.of_nat n = fileZ p + df).
+    { rewrite <- Heqn. rewrite Z2Nat.id; lia. }
+    rewrite <- H0.
+    clear - H.
+    destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; reflexivity || (exfalso; simpl in H; lia).
+  - apply rankZ_bounds.
+  - apply fileZ_bounds.
+Qed.
+
+(** * Offset Decidability *)
+
+Lemma offset_decidable : forall p dr df,
+  {p': Position | offset p dr df = Some p'} + {offset p dr df = None}.
+Proof.
+  intros p dr df.
+  unfold offset.
+  destruct (Z_to_rank (rankZ p + dr)) eqn:Hr.
+  - destruct (Z_to_file (fileZ p + df)) eqn:Hf.
+    + left. exists (mkPosition r f). reflexivity.
+    + right. reflexivity.
+  - right. reflexivity.
+Defined.
+
+(** * Distance Properties *)
+
+Definition manhattan_distance (p1 p2: Position) : Z :=
+  Z.abs (rankZ p2 - rankZ p1) + Z.abs (fileZ p2 - fileZ p1).
+
+Definition chebyshev_distance (p1 p2: Position) : Z :=
+  Z.max (Z.abs (rankZ p2 - rankZ p1)) (Z.abs (fileZ p2 - fileZ p1)).
+
+Lemma manhattan_distance_zero : forall p,
+  manhattan_distance p p = 0.
+Proof.
+  intro p. unfold manhattan_distance.
+  rewrite Z.sub_diag. simpl. reflexivity.
+Qed.
+
+Lemma manhattan_distance_sym : forall p1 p2,
+  manhattan_distance p1 p2 = manhattan_distance p2 p1.
+Proof.
+  intros p1 p2. unfold manhattan_distance.
+  rewrite Z.abs_opp, Z.abs_opp. ring.
+Qed.
+
+Lemma chebyshev_distance_zero : forall p,
+  chebyshev_distance p p = 0.
+Proof.
+  intro p. unfold chebyshev_distance.
+  rewrite Z.sub_diag. simpl. reflexivity.
+Qed.
+
+Lemma chebyshev_distance_sym : forall p1 p2,
+  chebyshev_distance p1 p2 = chebyshev_distance p2 p1.
+Proof.
+  intros p1 p2. unfold chebyshev_distance.
+  rewrite Z.abs_opp, Z.abs_opp. reflexivity.
+Qed.
+
+(** * Adjacent Position Detection *)
+
+Definition adjacent (p1 p2: Position) : bool :=
+  Z.eqb (chebyshev_distance p1 p2) 1.
+
+Lemma adjacent_sym : forall p1 p2,
+  adjacent p1 p2 = adjacent p2 p1.
+Proof.
+  intros. unfold adjacent.
+  rewrite chebyshev_distance_sym. reflexivity.
+Qed.
+
+(** * Diagonal Detection *)
+
+Definition on_same_diagonal (p1 p2: Position) : bool :=
+  Z.eqb (Z.abs (rankZ p2 - rankZ p1)) (Z.abs (fileZ p2 - fileZ p1)).
+
+Definition on_same_rank (p1 p2: Position) : bool :=
+  Z.eqb (rankZ p1) (rankZ p2).
+
+Definition on_same_file (p1 p2: Position) : bool :=
+  Z.eqb (fileZ p1) (fileZ p2).
+
+(** * Direction Computation *)
+
+Definition direction_to (from to: Position) : option (Z * Z) :=
+  let dr := rankZ to - rankZ from in
+  let df := fileZ to - fileZ from in
+  if Z.eqb dr 0 && Z.eqb df 0 then None
+  else 
+    let g := Z.gcd dr df in
+    Some (dr / g, df / g).
+
+Lemma direction_to_unit : forall from to dr df,
+  direction_to from to = Some (dr, df) ->
+  Z.gcd dr df = 1 \/ (dr = 0 /\ Z.abs df = 1) \/ (df = 0 /\ Z.abs dr = 1).
+Proof.
+  intros from to dr df H.
+  unfold direction_to in H.
+  destruct (Z.eqb (rankZ to - rankZ from) 0 && 
+            Z.eqb (fileZ to - fileZ from) 0) eqn:E; [discriminate|].
+  injection H. intros <- <-. clear H.
+  apply andb_false_iff in E.
+  pose proof (Z.gcd_nonneg (rankZ to - rankZ from) (fileZ to - fileZ from)).
+  remember (Z.gcd (rankZ to - rankZ from) (fileZ to - fileZ from)) as g.
+  destruct (Z.eq_dec g 0).
+  - subst g. apply Z.gcd_eq_0 in Heqg. destruct Heqg.
+    apply Z.eqb_neq in E. destruct E; congruence.
+  - assert (Hg: g > 0) by lia.
+    pose proof (Z.gcd_divide_l (rankZ to - rankZ from) (fileZ to - fileZ from)).
+    pose proof (Z.gcd_divide_r (rankZ to - rankZ from) (fileZ to - fileZ from)).
+    destruct H0 as [k1 Hk1], H1 as [k2 Hk2].
+    assert (Z.gcd ((rankZ to - rankZ from) / g) ((fileZ to - fileZ from) / g) = 1).
+    { rewrite <- Hk1, <- Hk2.
+      rewrite Z.mul_comm with (n := k1).
+      rewrite Z.mul_comm with (n := k2).
+      rewrite Z_div_mult_full, Z_div_mult_full; try lia.
+      rewrite <- Z.gcd_div_gcd; try lia.
+      rewrite Heqg, Z_div_same; lia. }
+    destruct (Z.eq_dec ((rankZ to - rankZ from) / g) 0).
+    + right. left. split; [assumption|].
+      assert ((fileZ to - fileZ from) / g <> 0).
+      { intro. apply Z.gcd_eq_0 in H1. lia. }
+      apply Z.gcd_1_rel_prime in H1.
+      apply Zrel_prime_neq_mod_0 in H1; try assumption.
+      simpl in H1.
+      assert (Z.abs ((fileZ to - fileZ from) / g) = 1).
+      { destruct ((fileZ to - fileZ from) / g); simpl in *; lia. }
+      exact H3.
+    + destruct (Z.eq_dec ((fileZ to - fileZ from) / g) 0).
+      * right. right. split; [assumption|].
+        assert ((rankZ to - rankZ from) / g <> 0) by assumption.
+        apply Z.gcd_1_rel_prime in H1.
+        apply Zrel_prime_neq_mod_0 in H1; try assumption.
+        simpl in H1.
+        assert (Z.abs ((rankZ to - rankZ from) / g) = 1).
+        { destruct ((rankZ to - rankZ from) / g); simpl in *; lia. }
+        exact H3.
+      * left. exact H1.
+Qed.
+
+(** * Validation *)
+
+Example offset_roundtrip : forall p dr df p',
+  offset p dr df = Some p' -> 
+  offset p' (-dr) (-df) = Some p.
+Proof.
+  exact offset_inverse.
+Qed.
+
+Example position_enumeration_complete : forall p,
+  In p enum_position.
+Proof.
+  exact enum_position_complete.
+Qed.
+
+Lemma offset_coord_change : forall p dr df p',
+  offset p dr df = Some p' ->
+  rankZ p' = rankZ p + dr /\
+  fileZ p' = fileZ p + df.
+Proof.
+  intros p dr df p' H.
+  apply offset_preserves_board_validity in H.
+  tauto.
+Qed.
+
+(** * End of Section 3: Position Abstraction *)
+
+Close Scope Z_scope.
