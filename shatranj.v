@@ -3828,22 +3828,6 @@ Proof.
     apply Color_beq_neq. exact Hpiece.
 Qed.
 
-(** Helper lemma for rukh movement in movement_preserves_board_validity *)
-Lemma rukh_can_reach_n_exists_path : forall b from dr df to n,
-  rukh_can_reach_n b from dr df to (S n) = true ->
-  exists dr' df', offset from dr' df' = Some to.
-Proof.
-  intros b from dr df to n H.
-  simpl in H.
-  destruct (offset from dr df) eqn:Hoff; [|discriminate].
-  unfold position_beq in H.
-  destruct (position_eq_dec p to).
-  - subst p. exists dr, df. exact Hoff.
-  - destruct (empty b p); [|discriminate].
-    (* For now, admit this case - we'll prove it separately *)
-    admit.
-Admitted.
-
 Lemma movement_preserves_board_validity : forall b pc from to,
   b[from] = Some pc ->
   can_move_piece b pc from to = true ->
