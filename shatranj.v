@@ -3230,6 +3230,30 @@ Proof.
     + reflexivity.
 Qed.
 
+(** * Alfil Color-Bound Validation *)
+
+Lemma alfil_restricted_movement : forall p,
+  (List.length (alfil_reachable_from p) <= 4)%nat.
+Proof.
+  exact alfil_reachable_count_max.
+Qed.
+
+Lemma alfil_move_preserves_color : forall p dr df q,
+  In (dr, df) alfil_vectors ->
+  offset p dr df = Some q ->
+  alfil_square_color q = alfil_square_color p.
+Proof.
+  intros p dr df q Hin Hoff.
+  pose proof (@alfil_preserves_square_color p dr df Hin q Hoff) as H.
+  symmetry. exact H.
+Qed.
+
+Theorem alfil_one_move_max_four : 
+  forall p, (List.length (alfil_reachable_from p) <= 4)%nat.
+Proof.
+  exact alfil_restricted_movement.
+Qed.
+
 (** * FARAS (Knight) Movement *)
 
 Definition faras_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
@@ -4034,3 +4058,4 @@ Definition apply_move_with_promotion (b: Board) (from to: Position) : Board :=
 (** * End of Section 7: Piece Movement Rules *)
 
 Close Scope Z_scope.
+        
