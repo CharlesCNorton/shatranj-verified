@@ -2879,24 +2879,59 @@ Proof.
   apply existsb_exists in H.
   destruct H as [[dr df] [Hin Hcheck]].
   simpl in Hin.
-  destruct Hin as [H|[H|[H|[H|[]]]]]; injection H; intros <- <-; clear H;
-  destruct (offset from _ _) eqn:Hoff; [|discriminate];
-  unfold position_beq in Hcheck;
-  destruct (position_eq_dec p to); [|discriminate];
-  subst p;
-  apply offset_preserves_board_validity in Hoff;
-  destruct Hoff as [Hr [Hf _]];
-  unfold chebyshev_distance;
-  rewrite Hr, Hf;
-  [replace (rankZ from + 2 - rankZ from) with 2 by ring;
-   replace (fileZ from + 2 - fileZ from) with 2 by ring |
-   replace (rankZ from + 2 - rankZ from) with 2 by ring;
-   replace (fileZ from + -2 - fileZ from) with (-2) by ring |
-   replace (rankZ from + -2 - rankZ from) with (-2) by ring;
-   replace (fileZ from + 2 - fileZ from) with 2 by ring |
-   replace (rankZ from + -2 - rankZ from) with (-2) by ring;
-   replace (fileZ from + -2 - fileZ from) with (-2) by ring];
-  simpl; reflexivity.
+  destruct Hin as [H|[H|[H|[H|[]]]]].
+  - injection H; intros <- <-; clear H.
+    simpl in Hcheck.
+    destruct (offset from 2 2) eqn:Hoff; [|discriminate].
+    unfold position_beq in Hcheck.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold chebyshev_distance.
+    rewrite Hr, Hf.
+    replace (rankZ from + 2 - rankZ from) with 2 by ring.
+    replace (fileZ from + 2 - fileZ from) with 2 by ring.
+    simpl. reflexivity.
+  - injection H; intros <- <-; clear H.
+    simpl in Hcheck.
+    destruct (offset from 2 (-2)) eqn:Hoff; [|discriminate].
+    unfold position_beq in Hcheck.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold chebyshev_distance.
+    rewrite Hr, Hf.
+    replace (rankZ from + 2 - rankZ from) with 2 by ring.
+    replace (fileZ from + (-2) - fileZ from) with (-2) by ring.
+    simpl. reflexivity.
+  - injection H; intros <- <-; clear H.
+    simpl in Hcheck.
+    destruct (offset from (-2) 2) eqn:Hoff; [|discriminate].
+    unfold position_beq in Hcheck.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold chebyshev_distance.
+    rewrite Hr, Hf.
+    replace (rankZ from + (-2) - rankZ from) with (-2) by ring.
+    replace (fileZ from + 2 - fileZ from) with 2 by ring.
+    simpl. reflexivity.
+  - injection H; intros <- <-; clear H.
+    simpl in Hcheck.
+    destruct (offset from (-2) (-2)) eqn:Hoff; [|discriminate].
+    unfold position_beq in Hcheck.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold chebyshev_distance.
+    rewrite Hr, Hf.
+    replace (rankZ from + (-2) - rankZ from) with (-2) by ring.
+    replace (fileZ from + (-2) - fileZ from) with (-2) by ring.
+    simpl. reflexivity.
 Qed.
 
 Lemma faras_leap_L_shape : forall from to,
@@ -2910,26 +2945,17 @@ Proof.
   apply existsb_exists in H.
   destruct H as [[drv dfv] [Hin Hcheck]].
   simpl in Hin.
-  repeat (destruct Hin as [Heq|Hin]; 
-    [injection Heq; intros <- <-; clear Heq|]);
-  try contradiction;
-  destruct (offset from _ _) eqn:Hoff; [|discriminate];
-  unfold position_beq in Hcheck;
-  destruct (position_eq_dec p to); [|discriminate];
-  subst p;
-  apply offset_preserves_board_validity in Hoff;
-  destruct Hoff as [Hr [Hf _]];
-  unfold dr, df;
-  rewrite Hr, Hf;
-  repeat (try replace (rankZ from + 2 - rankZ from) with 2 by ring);
-  repeat (try replace (rankZ from + 1 - rankZ from) with 1 by ring);
-  repeat (try replace (rankZ from + -2 - rankZ from) with (-2) by ring);
-  repeat (try replace (rankZ from + -1 - rankZ from) with (-1) by ring);
-  repeat (try replace (fileZ from + 2 - fileZ from) with 2 by ring);
-  repeat (try replace (fileZ from + 1 - fileZ from) with 1 by ring);
-  repeat (try replace (fileZ from + -2 - fileZ from) with (-2) by ring);
-  repeat (try replace (fileZ from + -1 - fileZ from) with (-1) by ring);
-  simpl; auto.
+  destruct Hin as [Heq|[Heq|[Heq|[Heq|[Heq|[Heq|[Heq|[Heq|[]]]]]]]]];
+  injection Heq; intros <- <-; clear Heq; simpl in Hcheck;
+  (destruct (offset from _ _) eqn:Hoff; [|discriminate];
+   unfold position_beq in Hcheck;
+   destruct (position_eq_dec p to); [|discriminate];
+   subst p;
+   apply offset_preserves_board_validity in Hoff;
+   destruct Hoff as [Hr [Hf _]];
+   unfold dr, df;
+   rewrite Hr, Hf;
+   simpl; lia).
 Qed.
 
 (** * Movement Helpers *)
