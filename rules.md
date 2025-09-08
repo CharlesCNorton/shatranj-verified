@@ -190,10 +190,6 @@ b. his opponent has been making no effort to win by normal means
 
 **13.4** The arbiter may apply penalties including: warning, time penalties, declaring the game lost, or expulsion from the event.
 
-### Article 14: FIDE
-
-**14.1** Member federations may ask FIDE to give official decisions about problems relating to the Laws of Shatranj.
-
 ## APPENDICES
 
 ### Appendix A: Rapidplay Shatranj
