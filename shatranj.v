@@ -3030,4 +3030,905 @@ Qed.
 (** * End of Section 6: Movement Geometry *)
 
 Close Scope Z_scope.
-           
+
+(* ========================================================================= *)
+(* SECTION 7: PIECE MOVEMENT RULES                                          *)
+(* ========================================================================= *)
+
+Open Scope Z_scope.
+
+(** * Movement Specifications *)
+
+(** * SHAH (King) Movement *)
+
+Definition shah_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
+  exists dr df,
+    In (dr, df) shah_vectors /\
+    offset from dr df = Some to /\
+    match b[to] with
+    | Some pc => piece_color pc <> c
+    | None => True
+    end.
+
+Definition shah_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
+  validate_step_move from to shah_vectors &&
+  negb (occupied_by b to c).
+
+Lemma Color_beq_eq : forall c1 c2,
+  Color_beq c1 c2 = true <-> c1 = c2.
+Proof.
+  intros [] []; simpl; split; intro H; 
+    [reflexivity|reflexivity|discriminate|discriminate|
+     discriminate|reflexivity|discriminate|reflexivity].
+Qed.
+
+Lemma Color_beq_neq : forall c1 c2,
+  Color_beq c1 c2 = false <-> c1 <> c2.
+Proof.
+  intros c1 c2. split.
+  - intro H. intro Heq. subst. 
+    destruct c2; simpl in H; discriminate.
+  - intro H. destruct c1, c2; simpl; 
+    [contradiction H; reflexivity|reflexivity|reflexivity|
+     contradiction H; reflexivity].
+Qed.
+
+Lemma shah_move_sound : forall b c from to,
+  shah_move_impl b c from to = true ->
+  shah_move_spec b c from to.
+Proof.
+  intros b c from to H.
+  unfold shah_move_impl in H.
+  apply andb_prop in H. destruct H as [Hmove Hoccupy].
+  unfold validate_step_move in Hmove.
+  apply existsb_exists in Hmove.
+  destruct Hmove as [[dr df] [Hin Hcheck]].
+  exists dr, df. split; [exact Hin|].
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p. split; [exact Hoff|].
+  unfold occupied_by in Hoccupy.
+  destruct (b[to]) eqn:Hbto.
+  - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
+    apply Color_beq_neq. exact Hoccupy.
+  - trivial.
+Qed.
+
+Lemma shah_move_complete : forall b c from to,
+  shah_move_spec b c from to ->
+  shah_move_impl b c from to = true.
+Proof.
+  intros b c from to [dr [df [Hin [Hoff Hcapture]]]].
+  unfold shah_move_impl.
+  apply andb_true_intro. split.
+  - unfold validate_step_move.
+    apply existsb_exists.
+    exists (dr, df). split; [exact Hin|].
+    simpl. rewrite Hoff.
+    unfold position_beq.
+    destruct (position_eq_dec to to); [reflexivity|contradiction].
+  - unfold occupied_by.
+    destruct (b[to]) eqn:Hbto.
+    + simpl. apply negb_true_iff. apply Color_beq_neq. exact Hcapture.
+    + reflexivity.
+Qed.
+
+(** * FERZ (Counselor) Movement *)
+
+Definition ferz_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
+  exists dr df,
+    In (dr, df) ferz_vectors /\
+    offset from dr df = Some to /\
+    match b[to] with
+    | Some pc => piece_color pc <> c
+    | None => True
+    end.
+
+Definition ferz_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
+  validate_step_move from to ferz_vectors &&
+  negb (occupied_by b to c).
+
+Lemma ferz_move_sound : forall b c from to,
+  ferz_move_impl b c from to = true ->
+  ferz_move_spec b c from to.
+Proof.
+  intros b c from to H.
+  unfold ferz_move_impl in H.
+  apply andb_prop in H. destruct H as [Hmove Hoccupy].
+  unfold validate_step_move in Hmove.
+  apply existsb_exists in Hmove.
+  destruct Hmove as [[dr df] [Hin Hcheck]].
+  exists dr, df. split; [exact Hin|].
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p. split; [exact Hoff|].
+  unfold occupied_by in Hoccupy.
+  destruct (b[to]) eqn:Hbto.
+  - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
+    apply Color_beq_neq. exact Hoccupy.
+  - trivial.
+Qed.
+
+Lemma ferz_move_complete : forall b c from to,
+  ferz_move_spec b c from to ->
+  ferz_move_impl b c from to = true.
+Proof.
+  intros b c from to [dr [df [Hin [Hoff Hcapture]]]].
+  unfold ferz_move_impl.
+  apply andb_true_intro. split.
+  - unfold validate_step_move.
+    apply existsb_exists.
+    exists (dr, df). split; [exact Hin|].
+    simpl. rewrite Hoff.
+    unfold position_beq.
+    destruct (position_eq_dec to to); [reflexivity|contradiction].
+  - unfold occupied_by.
+    destruct (b[to]) eqn:Hbto.
+    + simpl. apply negb_true_iff. apply Color_beq_neq. exact Hcapture.
+    + reflexivity.
+Qed.
+
+(** * ALFIL (Elephant) Movement *)
+
+Definition alfil_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
+  exists dr df,
+    In (dr, df) alfil_vectors /\
+    offset from dr df = Some to /\
+    match b[to] with
+    | Some pc => piece_color pc <> c
+    | None => True
+    end.
+
+Definition alfil_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
+  validate_leap_move from to alfil_vectors &&
+  negb (occupied_by b to c).
+
+Lemma alfil_move_sound : forall b c from to,
+  alfil_move_impl b c from to = true ->
+  alfil_move_spec b c from to.
+Proof.
+  intros b c from to H.
+  unfold alfil_move_impl in H.
+  apply andb_prop in H. destruct H as [Hmove Hoccupy].
+  unfold validate_leap_move in Hmove.
+  apply existsb_exists in Hmove.
+  destruct Hmove as [[dr df] [Hin Hcheck]].
+  exists dr, df. split; [exact Hin|].
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p. split; [exact Hoff|].
+  unfold occupied_by in Hoccupy.
+  destruct (b[to]) eqn:Hbto.
+  - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
+    apply Color_beq_neq. exact Hoccupy.
+  - trivial.
+Qed.
+
+Lemma alfil_move_complete : forall b c from to,
+  alfil_move_spec b c from to ->
+  alfil_move_impl b c from to = true.
+Proof.
+  intros b c from to [dr [df [Hin [Hoff Hcapture]]]].
+  unfold alfil_move_impl.
+  apply andb_true_intro. split.
+  - unfold validate_leap_move.
+    apply existsb_exists.
+    exists (dr, df). split; [exact Hin|].
+    simpl. rewrite Hoff.
+    unfold position_beq.
+    destruct (position_eq_dec to to); [reflexivity|contradiction].
+  - unfold occupied_by.
+    destruct (b[to]) eqn:Hbto.
+    + simpl. apply negb_true_iff. apply Color_beq_neq. exact Hcapture.
+    + reflexivity.
+Qed.
+
+(** * FARAS (Knight) Movement *)
+
+Definition faras_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
+  exists dr df,
+    In (dr, df) faras_vectors /\
+    offset from dr df = Some to /\
+    match b[to] with
+    | Some pc => piece_color pc <> c
+    | None => True
+    end.
+
+Definition faras_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
+  validate_leap_move from to faras_vectors &&
+  negb (occupied_by b to c).
+
+Lemma faras_move_sound : forall b c from to,
+  faras_move_impl b c from to = true ->
+  faras_move_spec b c from to.
+Proof.
+  intros b c from to H.
+  unfold faras_move_impl in H.
+  apply andb_prop in H. destruct H as [Hmove Hoccupy].
+  unfold validate_leap_move in Hmove.
+  apply existsb_exists in Hmove.
+  destruct Hmove as [[dr df] [Hin Hcheck]].
+  exists dr, df. split; [exact Hin|].
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p. split; [exact Hoff|].
+  unfold occupied_by in Hoccupy.
+  destruct (b[to]) eqn:Hbto.
+  - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
+    apply Color_beq_neq. exact Hoccupy.
+  - trivial.
+Qed.
+
+Lemma faras_move_complete : forall b c from to,
+  faras_move_spec b c from to ->
+  faras_move_impl b c from to = true.
+Proof.
+  intros b c from to [dr [df [Hin [Hoff Hcapture]]]].
+  unfold faras_move_impl.
+  apply andb_true_intro. split.
+  - unfold validate_leap_move.
+    apply existsb_exists.
+    exists (dr, df). split; [exact Hin|].
+    simpl. rewrite Hoff.
+    unfold position_beq.
+    destruct (position_eq_dec to to); [reflexivity|contradiction].
+  - unfold occupied_by.
+    destruct (b[to]) eqn:Hbto.
+    + simpl. apply negb_true_iff. apply Color_beq_neq. exact Hcapture.
+    + reflexivity.
+Qed.
+
+(** * RUKH (Rook) Movement *)
+
+Definition rukh_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
+  exists dr df n,
+    In (dr, df) rukh_directions /\
+    n > 0 /\
+    offset from (Z.of_nat n * dr) (Z.of_nat n * df) = Some to /\
+    (forall k, 0 < k < n -> 
+      exists p, offset from (Z.of_nat k * dr) (Z.of_nat k * df) = Some p /\
+                empty b p = true) /\
+    match b[to] with
+    | Some pc => piece_color pc <> c
+    | None => True
+    end.
+
+Fixpoint rukh_can_reach_n (b: Board) (from: Position) (dr df: Z) (to: Position) (n: nat) : bool :=
+  match n with
+  | O => false
+  | S n' =>
+      match offset from dr df with
+      | Some p =>
+          if position_beq p to then
+            true
+          else if empty b p then
+            rukh_can_reach_n b p dr df to n'
+          else
+            false
+      | None => false
+      end
+  end.
+
+Definition rukh_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
+  existsb (fun dir =>
+    rukh_can_reach_n b from (fst dir) (snd dir) to 7
+  ) rukh_directions &&
+  negb (occupied_by b to c).
+
+(** Helper lemmas for rukh movement *)
+
+Lemma rukh_can_reach_n_step : forall b from dr df to n p,
+  offset from dr df = Some p ->
+  p <> to ->
+  empty b p = true ->
+  rukh_can_reach_n b from dr df to (S n) = rukh_can_reach_n b p dr df to n.
+Proof.
+  intros b from dr df to n p Hoff Hneq Hemp.
+  simpl. rewrite Hoff.
+  unfold position_beq.
+  destruct (position_eq_dec p to).
+  - contradiction.
+  - rewrite Hemp. reflexivity.
+Qed.
+
+Lemma rukh_can_reach_n_found : forall b from dr df to n,
+  offset from dr df = Some to ->
+  rukh_can_reach_n b from dr df to (S n) = true.
+Proof.
+  intros b from dr df to n Hoff.
+  simpl. rewrite Hoff.
+  unfold position_beq.
+  destruct (position_eq_dec to to); [reflexivity|contradiction].
+Qed.
+
+Lemma rukh_can_reach_maintains_direction : forall b from dr df to n,
+  rukh_can_reach_n b from dr df to n = true ->
+  (dr = 0 /\ df <> 0) \/ (dr <> 0 /\ df = 0).
+Proof.
+  intros b from dr df to n H.
+  destruct n; [simpl in H; discriminate|].
+  simpl in H.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in H.
+  destruct (position_eq_dec p to).
+  - subst p.
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
+    + subst. rewrite Z.add_0_r in Hr, Hf. 
+      assert (from = to).
+      { apply position_ext; 
+        [apply rankZ_injective; exact Hr|
+         apply fileZ_injective; exact Hf]. }
+      contradiction (offset_nonzero from).
+    + left. split; assumption.
+    + right. split; assumption.
+    + right. split; assumption.
+  - destruct (empty b p); [|discriminate].
+    revert H. generalize n. clear n.
+    induction n0; intros H0.
+    + simpl in H0. discriminate.
+    + simpl in H0.
+      destruct (offset p dr df) eqn:Hoff2; [|discriminate].
+      destruct (position_beq p0 to).
+      * destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
+        -- subst. left. split; [reflexivity|].
+           intro. subst. rewrite Z.add_0_r in *.
+           apply offset_preserves_board_validity in Hoff.
+           destruct Hoff as [_ [Hf2 _]].
+           apply offset_preserves_board_validity in Hoff2.
+           destruct Hoff2 as [_ [Hf3 _]].
+           rewrite Hf2 in Hf3.
+           rewrite Z.add_0_r in Hf3.
+           assert (p = p0).
+           { apply position_ext;
+             [apply rankZ_injective; ring|
+              apply fileZ_injective; exact Hf3]. }
+           subst p0.
+           unfold position_beq in H1.
+           destruct (position_eq_dec p to); [|discriminate].
+           contradiction.
+        -- left. split; assumption.
+        -- right. split; assumption.
+        -- right. split; assumption.
+      * destruct (empty b p0); [|discriminate].
+        apply IHn0. exact H0.
+Qed.
+
+Lemma rankZ_injective : forall p1 p2,
+  rankZ p1 = rankZ p2 ->
+  pos_rank p1 = pos_rank p2.
+Proof.
+  intros p1 p2 H.
+  unfold rankZ in H.
+  assert (fin8_to_nat (rank_val (pos_rank p1)) = 
+          fin8_to_nat (rank_val (pos_rank p2))).
+  { apply Nat2Z.inj. exact H. }
+  destruct (pos_rank p1) as [r1], (pos_rank p2) as [r2].
+  simpl in H0.
+  f_equal.
+  apply fin8_exhaustive with (f := r1);
+  apply fin8_exhaustive with (f := r2);
+  simpl in H0; try discriminate; reflexivity.
+Qed.
+
+Lemma fileZ_injective : forall p1 p2,
+  fileZ p1 = fileZ p2 ->
+  pos_file p1 = pos_file p2.
+Proof.
+  intros p1 p2 H.
+  unfold fileZ in H.
+  assert (fin8_to_nat (file_val (pos_file p1)) = 
+          fin8_to_nat (file_val (pos_file p2))).
+  { apply Nat2Z.inj. exact H. }
+  destruct (pos_file p1) as [f1], (pos_file p2) as [f2].
+  simpl in H0.
+  f_equal.
+  apply fin8_exhaustive with (f := f1);
+  apply fin8_exhaustive with (f := f2);
+  simpl in H0; try discriminate; reflexivity.
+Qed.
+
+Lemma offset_nonzero : forall p,
+  offset p 0 0 = Some p ->
+  forall q, offset p 0 0 = Some q -> p = q.
+Proof.
+  intros p H q H2.
+  rewrite offset_zero in H, H2.
+  injection H2. intro. exact H0.
+Qed.
+
+Lemma rukh_orthogonal_movement : forall b from dr df to n,
+  In (dr, df) rukh_directions ->
+  rukh_can_reach_n b from dr df to n = true ->
+  (on_same_rank from to = true /\ dr = 0) \/ 
+  (on_same_file from to = true /\ df = 0).
+Proof.
+  intros b from dr df to n Hdir Hreach.
+  unfold rukh_directions in Hdir.
+  simpl in Hdir.
+  destruct Hdir as [H|[H|[H|[H|[]]]]]; injection H; intros <- <-.
+  - right. split.
+    + unfold on_same_file.
+      destruct n; [simpl in Hreach; discriminate|].
+      simpl in Hreach.
+      destruct (offset from 1 0) eqn:Hoff; [|discriminate].
+      apply offset_preserves_board_validity in Hoff.
+      destruct Hoff as [Hr [Hf _]].
+      rewrite Z.add_0_r in Hf.
+      unfold position_beq in Hreach.
+      destruct (position_eq_dec p to).
+      * subst p. rewrite Hf. apply Z.eqb_refl.
+      * destruct (empty b p); [|discriminate].
+        clear Hr n0.
+        revert p Hf Hreach.
+        induction n; intros p Hf Hreach.
+        -- simpl in Hreach. discriminate.
+        -- simpl in Hreach.
+           destruct (offset p 1 0) eqn:Hoff2; [|discriminate].
+           apply offset_preserves_board_validity in Hoff2.
+           destruct Hoff2 as [Hr2 [Hf2 _]].
+           rewrite Z.add_0_r in Hf2.
+           unfold position_beq in Hreach.
+           destruct (position_eq_dec p0 to).
+           ++ subst p0. rewrite Hf2, Hf. apply Z.eqb_refl.
+           ++ destruct (empty b p0); [|discriminate].
+              apply IHn with p0; [|exact Hreach].
+              rewrite Hf2, Hf. reflexivity.
+    + reflexivity.
+  - right. split.
+    + unfold on_same_file.
+      destruct n; [simpl in Hreach; discriminate|].
+      simpl in Hreach.
+      destruct (offset from (-1) 0) eqn:Hoff; [|discriminate].
+      apply offset_preserves_board_validity in Hoff.
+      destruct Hoff as [Hr [Hf _]].
+      rewrite Z.add_0_r in Hf.
+      unfold position_beq in Hreach.
+      destruct (position_eq_dec p to).
+      * subst p. rewrite Hf. apply Z.eqb_refl.
+      * destruct (empty b p); [|discriminate].
+        clear Hr n0.
+        revert p Hf Hreach.
+        induction n; intros p Hf Hreach.
+        -- simpl in Hreach. discriminate.
+        -- simpl in Hreach.
+           destruct (offset p (-1) 0) eqn:Hoff2; [|discriminate].
+           apply offset_preserves_board_validity in Hoff2.
+           destruct Hoff2 as [Hr2 [Hf2 _]].
+           rewrite Z.add_0_r in Hf2.
+           unfold position_beq in Hreach.
+           destruct (position_eq_dec p0 to).
+           ++ subst p0. rewrite Hf2, Hf. apply Z.eqb_refl.
+           ++ destruct (empty b p0); [|discriminate].
+              apply IHn with p0; [|exact Hreach].
+              rewrite Hf2, Hf. reflexivity.
+    + reflexivity.
+  - left. split.
+    + unfold on_same_rank.
+      destruct n; [simpl in Hreach; discriminate|].
+      simpl in Hreach.
+      destruct (offset from 0 1) eqn:Hoff; [|discriminate].
+      apply offset_preserves_board_validity in Hoff.
+      destruct Hoff as [Hr [Hf _]].
+      rewrite Z.add_0_r in Hr.
+      unfold position_beq in Hreach.
+      destruct (position_eq_dec p to).
+      * subst p. rewrite Hr. apply Z.eqb_refl.
+      * destruct (empty b p); [|discriminate].
+        clear Hf n0.
+        revert p Hr Hreach.
+        induction n; intros p Hr Hreach.
+        -- simpl in Hreach. discriminate.
+        -- simpl in Hreach.
+           destruct (offset p 0 1) eqn:Hoff2; [|discriminate].
+           apply offset_preserves_board_validity in Hoff2.
+           destruct Hoff2 as [Hr2 [Hf2 _]].
+           rewrite Z.add_0_r in Hr2.
+           unfold position_beq in Hreach.
+           destruct (position_eq_dec p0 to).
+           ++ subst p0. rewrite Hr2, Hr. apply Z.eqb_refl.
+           ++ destruct (empty b p0); [|discriminate].
+              apply IHn with p0; [|exact Hreach].
+              rewrite Hr2, Hr. reflexivity.
+    + reflexivity.
+  - left. split.
+    + unfold on_same_rank.
+      destruct n; [simpl in Hreach; discriminate|].
+      simpl in Hreach.
+      destruct (offset from 0 (-1)) eqn:Hoff; [|discriminate].
+      apply offset_preserves_board_validity in Hoff.
+      destruct Hoff as [Hr [Hf _]].
+      rewrite Z.add_0_r in Hr.
+      unfold position_beq in Hreach.
+      destruct (position_eq_dec p to).
+      * subst p. rewrite Hr. apply Z.eqb_refl.
+      * destruct (empty b p); [|discriminate].
+        clear Hf n0.
+        revert p Hr Hreach.
+        induction n; intros p Hr Hreach.
+        -- simpl in Hreach. discriminate.
+        -- simpl in Hreach.
+           destruct (offset p 0 (-1)) eqn:Hoff2; [|discriminate].
+           apply offset_preserves_board_validity in Hoff2.
+           destruct Hoff2 as [Hr2 [Hf2 _]].
+           rewrite Z.add_0_r in Hr2.
+           unfold position_beq in Hreach.
+           destruct (position_eq_dec p0 to).
+           ++ subst p0. rewrite Hr2, Hr. apply Z.eqb_refl.
+           ++ destruct (empty b p0); [|discriminate].
+              apply IHn with p0; [|exact Hreach].
+              rewrite Hr2, Hr. reflexivity.
+    + reflexivity.
+Qed.
+
+(** * BAIDAQ (Pawn) Movement *)
+
+Definition baidaq_at_promotion_rank (p: Position) (c: Color) : bool :=
+  match c with
+  | White => if rank_eq_dec (pos_rank p) rank8 then true else false
+  | Black => if rank_eq_dec (pos_rank p) rank1 then true else false
+  end.
+
+Definition baidaq_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
+  let move_dir := baidaq_move_vector c in
+  let capture_dirs := baidaq_capture_vectors c in
+  (offset from (fst move_dir) (snd move_dir) = Some to /\ 
+   empty b to = true) \/
+  (exists dr df,
+    In (dr, df) capture_dirs /\
+    offset from dr df = Some to /\
+    exists pc, b[to] = Some pc /\ piece_color pc <> c).
+
+Definition baidaq_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
+  let move_dir := baidaq_move_vector c in
+  let capture_dirs := baidaq_capture_vectors c in
+  (match offset from (fst move_dir) (snd move_dir) with
+   | Some p => andb (position_beq p to) (empty b to)
+   | None => false
+   end) ||
+  (existsb (fun dir =>
+    match offset from (fst dir) (snd dir) with
+    | Some p => andb (position_beq p to) 
+                    (match b[to] with
+                     | Some pc => negb (Color_beq (piece_color pc) c)
+                     | None => false
+                     end)
+    | None => false
+    end) capture_dirs).
+
+Lemma baidaq_move_sound : forall b c from to,
+  baidaq_move_impl b c from to = true ->
+  baidaq_move_spec b c from to.
+Proof.
+  intros b c from to H.
+  unfold baidaq_move_impl in H.
+  apply orb_prop in H. destruct H as [Hmove|Hcapture].
+  - left.
+    destruct (offset from (fst (baidaq_move_vector c)) 
+                         (snd (baidaq_move_vector c))) eqn:Hoff; 
+      [|discriminate].
+    apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
+    unfold position_beq in Hpos.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p. split; assumption.
+  - right.
+    apply existsb_exists in Hcapture.
+    destruct Hcapture as [[dr df] [Hin Hcheck]].
+    exists dr, df. split; [exact Hin|].
+    simpl in Hcheck.
+    destruct (offset from dr df) eqn:Hoff; [|discriminate].
+    apply andb_prop in Hcheck. destruct Hcheck as [Hpos Hpiece].
+    unfold position_beq in Hpos.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p. split; [exact Hoff|].
+    destruct (b[to]) eqn:Hbto; [|discriminate].
+    exists p0. split; [reflexivity|].
+    apply negb_true_iff in Hpiece.
+    apply Color_beq_neq. exact Hpiece.
+Qed.
+
+Lemma baidaq_move_complete : forall b c from to,
+  baidaq_move_spec b c from to ->
+  baidaq_move_impl b c from to = true.
+Proof.
+  intros b c from to Hspec.
+  unfold baidaq_move_impl.
+  destruct Hspec as [[Hoff Hemp]|[dr [df [Hin [Hoff [pc [Hbto Hcolor]]]]]]].
+  - apply orb_true_intro. left.
+    rewrite Hoff.
+    apply andb_true_intro. split.
+    + unfold position_beq.
+      destruct (position_eq_dec to to); [reflexivity|contradiction].
+    + exact Hemp.
+  - apply orb_true_intro. right.
+    apply existsb_exists.
+    exists (dr, df). split; [exact Hin|].
+    simpl. rewrite Hoff.
+    apply andb_true_intro. split.
+    + unfold position_beq.
+      destruct (position_eq_dec to to); [reflexivity|contradiction].
+    + rewrite Hbto. apply negb_true_iff. apply Color_beq_neq. exact Hcolor.
+Qed.
+
+(** * Unified Piece Movement *)
+
+Definition can_move_piece (b: Board) (pc: Piece) (from to: Position) : bool :=
+  let c := piece_color pc in
+  match piece_type pc with
+  | Shah => shah_move_impl b c from to
+  | Ferz => ferz_move_impl b c from to
+  | Alfil => alfil_move_impl b c from to
+  | Faras => faras_move_impl b c from to
+  | Rukh => rukh_move_impl b c from to
+  | Baidaq => baidaq_move_impl b c from to
+  end.
+
+(** * Movement Properties *)
+
+Lemma no_friendly_fire : forall b pc from to,
+  b[from] = Some pc ->
+  can_move_piece b pc from to = true ->
+  forall pc', b[to] = Some pc' -> piece_color pc' <> piece_color pc.
+Proof.
+  intros b pc from to Hfrom Hmove pc' Hto.
+  unfold can_move_piece in Hmove.
+  destruct (piece_type pc) eqn:Htype;
+    unfold shah_move_impl, ferz_move_impl, alfil_move_impl, 
+           faras_move_impl, rukh_move_impl, baidaq_move_impl in Hmove;
+    try (apply andb_prop in Hmove; destruct Hmove as [_ Hoccupy];
+         unfold occupied_by in Hoccupy;
+         rewrite Hto in Hoccupy;
+         simpl in Hoccupy;
+         apply negb_true_iff in Hoccupy;
+         apply Color_beq_neq;
+         exact Hoccupy).
+  apply orb_prop in Hmove. destruct Hmove as [Hmove|Hcapture].
+  - destruct (offset from (fst (baidaq_move_vector (piece_color pc)))
+                         (snd (baidaq_move_vector (piece_color pc)))) eqn:Hoff;
+      [|discriminate].
+    apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
+    unfold empty in Hemp. rewrite Hto in Hemp. simpl in Hemp. discriminate.
+  - apply existsb_exists in Hcapture.
+    destruct Hcapture as [[dr df] [Hin Hcheck]].
+    simpl in Hcheck.
+    destruct (offset from dr df) eqn:Hoff; [|discriminate].
+    apply andb_prop in Hcheck. destruct Hcheck as [Hpos Hpiece].
+    unfold position_beq in Hpos.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    rewrite Hto in Hpiece.
+    apply negb_true_iff in Hpiece.
+    apply Color_beq_neq. exact Hpiece.
+Qed.
+
+Lemma movement_preserves_board_validity : forall b pc from to,
+  b[from] = Some pc ->
+  can_move_piece b pc from to = true ->
+  offset from 0 0 = Some from /\ 
+  exists dr df, offset from dr df = Some to.
+Proof.
+  intros b pc from to Hfrom Hmove.
+  split.
+  - apply offset_zero.
+  - unfold can_move_piece in Hmove.
+    destruct (piece_type pc) eqn:Htype.
+    + unfold shah_move_impl in Hmove.
+      apply andb_prop in Hmove. destruct Hmove as [Hval _].
+      unfold validate_step_move in Hval.
+      apply existsb_exists in Hval.
+      destruct Hval as [[dr df] [_ Hcheck]].
+      simpl in Hcheck.
+      destruct (offset from dr df) eqn:Hoff; [|discriminate].
+      unfold position_beq in Hcheck.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p. exists dr, df. exact Hoff.
+    + unfold ferz_move_impl in Hmove.
+      apply andb_prop in Hmove. destruct Hmove as [Hval _].
+      unfold validate_step_move in Hval.
+      apply existsb_exists in Hval.
+      destruct Hval as [[dr df] [_ Hcheck]].
+      simpl in Hcheck.
+      destruct (offset from dr df) eqn:Hoff; [|discriminate].
+      unfold position_beq in Hcheck.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p. exists dr, df. exact Hoff.
+    + unfold alfil_move_impl in Hmove.
+      apply andb_prop in Hmove. destruct Hmove as [Hval _].
+      unfold validate_leap_move in Hval.
+      apply existsb_exists in Hval.
+      destruct Hval as [[dr df] [_ Hcheck]].
+      simpl in Hcheck.
+      destruct (offset from dr df) eqn:Hoff; [|discriminate].
+      unfold position_beq in Hcheck.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p. exists dr, df. exact Hoff.
+    + unfold faras_move_impl in Hmove.
+      apply andb_prop in Hmove. destruct Hmove as [Hval _].
+      unfold validate_leap_move in Hval.
+      apply existsb_exists in Hval.
+      destruct Hval as [[dr df] [_ Hcheck]].
+      simpl in Hcheck.
+      destruct (offset from dr df) eqn:Hoff; [|discriminate].
+      unfold position_beq in Hcheck.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p. exists dr, df. exact Hoff.
+    + unfold rukh_move_impl in Hmove.
+      apply andb_prop in Hmove. destruct Hmove as [Hreach _].
+      apply existsb_exists in Hreach.
+      destruct Hreach as [[dr df] [Hin Hcan]].
+      simpl in Hcan.
+      clear Hmove Hfrom.
+      revert Hcan. generalize 7%nat.
+      induction n; intros Hcan; simpl in Hcan.
+      * discriminate.
+      * destruct (offset from dr df) eqn:Hoff; [|discriminate].
+        unfold position_beq in Hcan.
+        destruct (position_eq_dec p to).
+        -- subst p. exists dr, df. exact Hoff.
+        -- destruct (empty b p); [|discriminate].
+           assert (IH := IHn Hcan).
+           destruct IH as [dr' [df' Hoff']].
+           exists (dr + dr'), (df + df').
+           apply offset_compose with p; assumption.
+    + unfold baidaq_move_impl in Hmove.
+      apply orb_prop in Hmove. destruct Hmove as [Hmove|Hcapture].
+      * destruct (offset from (fst (baidaq_move_vector (piece_color pc)))
+                             (snd (baidaq_move_vector (piece_color pc)))) eqn:Hoff;
+          [|discriminate].
+        apply andb_prop in Hmove. destruct Hmove as [Hpos _].
+        unfold position_beq in Hpos.
+        destruct (position_eq_dec p to); [|discriminate].
+        subst p.
+        exists (fst (baidaq_move_vector (piece_color pc))),
+               (snd (baidaq_move_vector (piece_color pc))).
+        exact Hoff.
+      * apply existsb_exists in Hcapture.
+        destruct Hcapture as [[dr df] [_ Hcheck]].
+        simpl in Hcheck.
+        destruct (offset from dr df) eqn:Hoff; [|discriminate].
+        apply andb_prop in Hcheck. destruct Hcheck as [Hpos _].
+        unfold position_beq in Hpos.
+        destruct (position_eq_dec p to); [|discriminate].
+        subst p. exists dr, df. exact Hoff.
+Qed.
+
+(** * Validation Examples *)
+
+Example rukh_orthogonal : forall b c from to,
+  rukh_move_impl b c from to = true ->
+  on_same_rank from to = true \/ on_same_file from to = true.
+Proof.
+  intros b c from to H.
+  unfold rukh_move_impl in H.
+  apply andb_prop in H. destruct H as [Hreach _].
+  apply existsb_exists in Hreach.
+  destruct Hreach as [[dr df] [Hin Hcan]].
+  simpl in Hcan.
+  pose proof (rukh_orthogonal_movement b from dr df to 7 Hin Hcan) as Horth.
+  destruct Horth as [[Hrank _]|[Hfile _]].
+  - left. exact Hrank.
+  - right. exact Hfile.
+Qed.
+
+Example shah_one_square : forall b c from to,
+  shah_move_impl b c from to = true ->
+  chebyshev_distance from to = 1.
+Proof.
+  intros b c from to H.
+  unfold shah_move_impl in H.
+  apply andb_prop in H. destruct H as [Hval _].
+  unfold validate_step_move in Hval.
+  apply existsb_exists in Hval.
+  destruct Hval as [[dr df] [Hin Hcheck]].
+  unfold shah_vectors in Hin.
+  simpl in Hin.
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p.
+  apply offset_preserves_board_validity in Hoff.
+  destruct Hoff as [Hr [Hf _]].
+  unfold chebyshev_distance.
+  rewrite Hr, Hf.
+  replace (rankZ from + dr - rankZ from) with dr by ring.
+  replace (fileZ from + df - fileZ from) with df by ring.
+  destruct Hin as [H|[H|[H|[H|[H|[H|[H|[H|[]]]]]]]]];
+    injection H; intros <- <-; simpl; reflexivity.
+Qed.
+
+Example ferz_diagonal_only : forall b c from to,
+  ferz_move_impl b c from to = true ->
+  Z.abs (rankZ to - rankZ from) = Z.abs (fileZ to - fileZ from).
+Proof.
+  intros b c from to H.
+  unfold ferz_move_impl in H.
+  apply andb_prop in H. destruct H as [Hval _].
+  unfold validate_step_move in Hval.
+  apply existsb_exists in Hval.
+  destruct Hval as [[dr df] [Hin Hcheck]].
+  unfold ferz_vectors in Hin.
+  simpl in Hin.
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p.
+  apply offset_preserves_board_validity in Hoff.
+  destruct Hoff as [Hr [Hf _]].
+  rewrite Hr, Hf.
+  replace (rankZ from + dr - rankZ from) with dr by ring.
+  replace (fileZ from + df - fileZ from) with df by ring.
+  destruct Hin as [H|[H|[H|[H|[]]]]];
+    injection H; intros <- <-; simpl; reflexivity.
+Qed.
+
+Example alfil_leap_two : forall b c from to,
+  alfil_move_impl b c from to = true ->
+  chebyshev_distance from to = 2.
+Proof.
+  intros b c from to H.
+  unfold alfil_move_impl in H.
+  apply andb_prop in H. destruct H as [Hval _].
+  apply alfil_leap_distance. exact Hval.
+Qed.
+
+(** * Additional Movement Helpers *)
+
+Definition is_valid_move (b: Board) (from to: Position) : bool :=
+  match b[from] with
+  | Some pc => can_move_piece b pc from to
+  | None => false
+  end.
+
+Definition threatens (b: Board) (from to: Position) : bool :=
+  match b[from] with
+  | Some pc =>
+      match piece_type pc with
+      | Baidaq =>
+          let c := piece_color pc in
+          let capture_dirs := baidaq_capture_vectors c in
+          existsb (fun dir =>
+            match offset from (fst dir) (snd dir) with
+            | Some p => position_beq p to
+            | None => false
+            end) capture_dirs
+      | _ => can_move_piece b pc from to
+      end
+  | None => false
+  end.
+
+(** * Movement with Promotion *)
+
+Definition move_promotes_baidaq (b: Board) (c: Color) (from to: Position) : bool :=
+  match b[from] with
+  | Some pc =>
+      andb (PieceType_beq (piece_type pc) Baidaq)
+           (baidaq_at_promotion_rank to c)
+  | None => false
+  end.
+
+Definition apply_move_with_promotion (b: Board) (from to: Position) : Board :=
+  match b[from] with
+  | Some pc =>
+      let b' := board_move b from to in
+      if andb (PieceType_beq (piece_type pc) Baidaq)
+              (baidaq_at_promotion_rank to (piece_color pc))
+      then board_place b' to (mkPiece (piece_color pc) Ferz)
+      else b'
+  | None => b
+  end.
+
+(** * End of Section 7: Piece Movement Rules *)
+
+Close Scope Z_scope.
+        
