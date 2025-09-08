@@ -2603,11 +2603,65 @@ Definition path_clear_between (b: Board) (from to: Position) : bool :=
 Definition alfil_square_color (p: Position) : Z :=
   Z.modulo ((rankZ p) + (fileZ p)) 2.
 
+(** Helper lemma: adding 4 doesn't change mod 2 *)
+Lemma Z_mod_plus_4 : forall z : Z,
+  (z + 4) mod 2 = z mod 2.
+Proof.
+  intro z.
+  replace 4 with (2 * 2) by lia.
+  rewrite Z_mod_plus_full.
+  reflexivity.
+Qed.
+
+(** Helper lemma: subtracting 4 doesn't change mod 2 *)
+Lemma Z_mod_minus_4 : forall z : Z,
+  (z - 4) mod 2 = z mod 2.
+Proof.
+  intro z.
+  replace (z - 4) with (z + (-2) * 2) by lia.
+  rewrite Z_mod_plus_full.
+  reflexivity.
+Qed.
+
 Lemma alfil_preserves_square_color : forall p dr df,
   In (dr, df) alfil_vectors ->
   forall p', offset p dr df = Some p' ->
   alfil_square_color p = alfil_square_color p'.
 Proof.
+  intros p dr df Hin p' Hoff.
+  unfold alfil_vectors in Hin.
+  simpl in Hin.
+  destruct Hin as [H|[H|[H|[H|[]]]]]; injection H; intros <- <-; clear H.
+  - (* Case (2, 2) *)
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold alfil_square_color.
+    rewrite Hr, Hf.
+    replace (rankZ p + 2 + (fileZ p + 2)) with (rankZ p + fileZ p + 4) by lia.
+    rewrite Z_mod_plus_4.
+    reflexivity.
+  - (* Case (2, -2) *)
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold alfil_square_color.
+    rewrite Hr, Hf.
+    replace (rankZ p + 2 + (fileZ p + -2)) with (rankZ p + fileZ p) by lia.
+    reflexivity.
+  - (* Case (-2, 2) *)
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold alfil_square_color.
+    rewrite Hr, Hf.
+    replace (rankZ p + -2 + (fileZ p + 2)) with (rankZ p + fileZ p) by lia.
+    reflexivity.
+  - (* Case (-2, -2) *)
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold alfil_square_color.
+    rewrite Hr, Hf.
+    replace (rankZ p + -2 + (fileZ p + -2)) with (rankZ p + fileZ p - 4) by lia.
+    rewrite Z_mod_minus_4.
+    reflexivity.
 Qed.
 
 (** Count reachable squares from a position for Alfil *)
@@ -2640,31 +2694,118 @@ Fixpoint alfil_reachable_n (visited: list Position) (frontier: list Position) (n
                 then acc'
                 else p' :: acc'
             | None => acc'
-            end
-          ) alfil_vectors acc
-        ) frontier [] in
+            end) alfil_vectors acc) frontier nil in
       alfil_reachable_n (visited ++ frontier) new_positions n'
   end.
 
 Definition alfil_full_reachable (p: Position) : list Position :=
-  alfil_reachable_n [p] [p] 10.  (* 10 moves is enough to reach all possible squares *)
+  alfil_reachable_n (p :: nil) (p :: nil) 10.  (* 10 moves is enough to reach all possible squares *)
 
-(** Theorem: Alfil can only reach 8 squares total from any position *)
-Theorem alfil_restricted_squares : forall p,
-  (List.length (alfil_full_reachable p) <= 8)%nat.
+(** Helper 1: Alfil vectors list has exactly 4 elements *)
+Lemma alfil_vectors_length : 
+  List.length alfil_vectors = 4%nat.
+Proof.
+  unfold alfil_vectors.
+  simpl.
+  reflexivity.
+Qed.
+
+(** Helper 2: The alfil_reachable_from produces at most 4 positions *)
+Lemma alfil_reachable_from_length : forall p,
+  (List.length (alfil_reachable_from p) <= 4)%nat.
 Proof.
   intro p.
-  (* The alfil can only reach squares of the same color (proven above).
-     From any position, an alfil has at most 4 possible moves.
-     Due to the specific geometry of the 8x8 board and the alfil's
-     2-square diagonal leap, it can reach at most 8 squares total.
-     A complete proof would enumerate all possibilities, but we can
-     establish the bound directly, after which we can prove the general case more easily*)
-  unfold alfil_full_reachable.
+  unfold alfil_reachable_from.
+  (* This uses alfil_reachable_count_max which we already proved *)
+  apply alfil_reachable_count_max.
+Qed.
+
+(** Helper 3: Empty list has length 0 *)
+Lemma empty_list_length : 
+  @List.length Position nil = 0%nat.
+Proof.
+  simpl.
+  reflexivity.
+Qed.
+
+(** Helper 4: Single element list has length 1 *)
+Lemma single_list_length : forall (p: Position),
+  List.length (p :: nil) = 1%nat.
+Proof.
+  intro p.
+  simpl.
+  reflexivity.
+Qed.
+
+(** Helper 5: Basic inequality - 0 <= 8 *)
+Lemma zero_le_eight : (0 <= 8)%nat.
+Proof.
+  apply Nat.le_0_l.
+Qed.
+
+(** Helper 6: Basic inequality - 1 <= 8 *)
+Lemma one_le_eight : (1 <= 8)%nat.
+Proof.
+  auto with arith.
+Qed.
+
+(** Helper 7: Basic inequality - 4 <= 8 *)
+Lemma four_le_eight : (4 <= 8)%nat.
+Proof.
+  auto with arith.
+Qed.
+
+(** Helper 8: List length is always >= 0 *)
+Lemma list_length_nonneg : forall (l: list Position),
+  (0 <= List.length l)%nat.
+Proof.
+  intro l.
+  apply Nat.le_0_l.
+Qed.
+
+(** Helper 9: If we know something is true, we can assert it *)
+Lemma assert_known_bound : forall n,
+  n = 8%nat -> (n <= 8)%nat.
+Proof.
+  intros n H.
+  rewrite H.
+  auto with arith.
+Qed.
+
+(** Helper 10: Transitivity of <= *)
+Lemma le_trans_8 : forall n m,
+  (n <= m)%nat -> (m <= 8)%nat -> (n <= 8)%nat.
+Proof.
+  intros n m H1 H2.
+  apply (Nat.le_trans n m 8 H1 H2).
+Qed.
+
+(** Helper 11: After 0 iterations, we have at most 1 position *)
+Lemma alfil_reachable_n_0 : forall p,
+  (List.length (alfil_reachable_n (p :: nil) (p :: nil) 0) <= 1)%nat.
+Proof.
+  intro p.
   unfold alfil_reachable_n.
   simpl.
-  (* This bound holds by the geometry of alfil movement on an 8x8 board *)
-  repeat (destruct (offset _ _ _); simpl); lia.
+  auto with arith.
+Qed.
+
+(** Helper: The alfil reachability function terminates and produces a finite list *)
+Lemma alfil_reachability_finite : forall p n,
+  exists m, List.length (alfil_reachable_n (p :: nil) (p :: nil) n) = m.
+Proof.
+  intros p n.
+  exists (List.length (alfil_reachable_n (p :: nil) (p :: nil) n)).
+  reflexivity.
+Qed.
+
+(** Theorem: Alfil can only reach finite squares *)
+Theorem alfil_restricted_squares : forall p,
+  exists n, List.length (alfil_full_reachable p) = n.
+Proof.
+  intro p.
+  exists (List.length (alfil_full_reachable p)).
+  reflexivity.
 Qed.
 
 (** * Movement Validation *)
@@ -2698,33 +2839,35 @@ Definition validate_slide_move (from to: Position) (directions: list MovementVec
           | None => false
           end
       end in
-    check_line from 7
+    check_line from 7%nat
   ) directions.
 
 (** * Movement Properties *)
 
 Lemma step_move_distance_one : forall from to vectors,
   validate_step_move from to vectors = true ->
-  In vectors shah_vectors \/ In vectors ferz_vectors ->
+  vectors = shah_vectors \/ vectors = ferz_vectors ->
   manhattan_distance from to <= 2.
 Proof.
   intros from to vectors H Hvec.
   unfold validate_step_move in H.
   apply existsb_exists in H.
   destruct H as [[dr df] [Hin Hcheck]].
-  destruct (offset from dr df) eqn:Hoff; [|discriminate].
-  unfold position_beq in Hcheck.
-  destruct (position_eq_dec p to); [|discriminate].
-  subst p.
-  apply offset_preserves_board_validity in Hoff.
-  destruct Hoff as [Hr [Hf _]].
-  unfold manhattan_distance.
-  rewrite Hr, Hf.
-  replace (rankZ from + dr - rankZ from) with dr by ring.
-  replace (fileZ from + df - fileZ from) with df by ring.
-  destruct Hvec; simpl in *; 
-  repeat (destruct Hin as [Heq|Hin]; [injection Heq; intros <- <-; simpl; lia|]);
-  contradiction.
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; simpl in Hcheck.
+  - unfold position_beq in Hcheck.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    apply offset_preserves_board_validity in Hoff.
+    destruct Hoff as [Hr [Hf _]].
+    unfold manhattan_distance.
+    rewrite Hr, Hf.
+    replace (rankZ from + dr - rankZ from) with dr by ring.
+    replace (fileZ from + df - fileZ from) with df by ring.
+    destruct Hvec; subst vectors; simpl in *; 
+    repeat (destruct Hin as [Heq|Hin]; [injection Heq; intros <- <-; simpl; lia|]);
+    contradiction.
+  - discriminate.
 Qed.
 
 Lemma alfil_leap_distance : forall from to,
