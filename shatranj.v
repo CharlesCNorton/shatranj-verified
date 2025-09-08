@@ -3419,8 +3419,7 @@ Proof.
 Qed.
 
 Lemma rukh_can_reach_zero_step : forall b from n,
-  rukh_can_reach_n b from 0 0 from (S n) = 
-  if empty b from then rukh_can_reach_n b from 0 0 from n else false.
+  rukh_can_reach_n b from 0 0 from (S n) = true.
 Proof.
   intros b from n.
   simpl.
@@ -3438,36 +3437,34 @@ Proof.
 Qed.
 
 Lemma rukh_can_reach_zero_one : forall b from,
-  rukh_can_reach_n b from 0 0 from 1 = 
-  if empty b from then false else false.
+  rukh_can_reach_n b from 0 0 from 1 = true.
 Proof.
   intros b from.
-  rewrite rukh_can_reach_zero_step.
-  rewrite rukh_can_reach_zero_base.
-  destruct (empty b from); reflexivity.
+  apply rukh_can_reach_zero_step.
 Qed.
 
-Lemma rukh_can_reach_zero_zero_all_false : forall b from n,
-  rukh_can_reach_n b from 0 0 from n = false.
+Lemma rukh_can_reach_zero_zero_nonzero : forall b from n,
+  (n > 0)%nat -> rukh_can_reach_n b from 0 0 from n = true.
 Proof.
-  intros b from n.
+  intros b from n Hn.
+  destruct n.
+  - exfalso. apply (Nat.lt_irrefl 0). exact Hn.
+  - apply rukh_can_reach_zero_step.
+Qed.
+
+Lemma rukh_can_reach_zero_zero_diff : forall b from to n,
+  from <> to -> rukh_can_reach_n b from 0 0 to n = false.
+Proof.
+  intros b from to n Hneq.
   induction n.
-  - apply rukh_can_reach_zero_base.
-  - rewrite rukh_can_reach_zero_step.
-    destruct (empty b from); [exact IHn|reflexivity].
-Qed.
-
-Lemma rukh_can_reach_zero_zero_false : forall b from to n,
-  rukh_can_reach_n b from 0 0 to n = false.
-Proof.
-  intros b from to n.
-  destruct (position_eq_dec from to).
-  - subst to. apply rukh_can_reach_zero_zero_all_false.
-  - destruct n.
-    + simpl. reflexivity.
-    + simpl. rewrite offset_zero.
-      unfold position_beq.
-      destruct (position_eq_dec from to); [contradiction|reflexivity].
+  - simpl. reflexivity.
+  - simpl. rewrite offset_zero.
+    unfold position_beq.
+    destruct (position_eq_dec from to).
+    + contradiction.
+    + destruct (empty b from).
+      * exact IHn.
+      * reflexivity.
 Qed.
 
 Lemma rukh_directions_non_zero : forall dr df,
@@ -3482,28 +3479,35 @@ Proof.
 Qed.
 
 Lemma rukh_can_reach_not_zero_zero : forall b from dr df to n,
+  from <> to ->
   rukh_can_reach_n b from dr df to n = true ->
   ~(dr = 0 /\ df = 0).
 Proof.
-  intros b from dr df to n H Hcontra.
+  intros b from dr df to n Hneq H Hcontra.
   destruct Hcontra as [Hdr Hdf].
   subst dr df.
-  rewrite rukh_can_reach_zero_zero_false in H.
+  rewrite rukh_can_reach_zero_zero_diff in H; auto.
   discriminate.
 Qed.
 
-Lemma rukh_can_reach_maintains_direction : forall b from dr df to n,
+Lemma rukh_can_reach_maintains_orthogonal : forall b from dr df to n,
+  In (dr, df) rukh_directions ->
   rukh_can_reach_n b from dr df to n = true ->
   (dr = 0 /\ df <> 0) \/ (dr <> 0 /\ df = 0).
 Proof.
-  intros b from dr df to n H.
+  intros b from dr df to n Hdir H.
   assert (Hnz: ~(dr = 0 /\ df = 0)).
-  { apply rukh_can_reach_not_zero_zero with b from to n. exact H. }
+  { apply rukh_directions_non_zero. exact Hdir. }
   destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
   - exfalso. apply Hnz. split; assumption.
   - left. split; assumption.
   - right. split; assumption.
-  - right. split; assumption.
+  - exfalso. 
+    unfold rukh_directions in Hdir.
+    simpl in Hdir.
+    destruct Hdir as [H'|[H'|[H'|[H'|[]]]]]; 
+    injection H'; intros <- <-; 
+    contradiction.
 Qed.
 
 Lemma rukh_orthogonal_movement : forall b from dr df to n,
@@ -3679,7 +3683,7 @@ Proof.
     apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
     unfold position_beq in Hpos.
     destruct (position_eq_dec p to); [|discriminate].
-    subst p. split; assumption.
+    subst p. split; [reflexivity|exact Hemp].
   - right.
     apply existsb_exists in Hcapture.
     destruct Hcapture as [[dr df] [Hin Hcheck]].
@@ -3691,7 +3695,7 @@ Proof.
     destruct (position_eq_dec p to); [|discriminate].
     subst p. split; [reflexivity|].
     destruct (b[to]) eqn:Hbto; [|discriminate].
-    exists p0. split; [reflexivity|].
+    exists p. split; [reflexivity|].
     apply negb_true_iff in Hpiece.
     apply Color_beq_neq. exact Hpiece.
 Qed.
@@ -3756,7 +3760,10 @@ Proof.
                          (snd (baidaq_move_vector (piece_color pc)))) eqn:Hoff;
       [|discriminate].
     apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
-    unfold empty in Hemp. rewrite Hto in Hemp. simpl in Hemp. discriminate.
+    unfold position_beq in Hpos.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    unfold empty, occupied in Hemp. rewrite Hto in Hemp. simpl in Hemp. discriminate.
   - apply existsb_exists in Hcapture.
     destruct Hcapture as [[dr df] [Hin Hcheck]].
     simpl in Hcheck.
@@ -3826,8 +3833,9 @@ Proof.
       apply existsb_exists in Hreach.
       destruct Hreach as [[dr df] [Hin Hcan]].
       simpl in Hcan.
-      clear Hmove Hfrom.
-      revert Hcan. generalize 7%nat.
+      clear Hfrom.
+      revert Hcan. 
+      generalize (7%nat). intro n.
       induction n; intros Hcan; simpl in Hcan.
       * discriminate.
       * destruct (offset from dr df) eqn:Hoff; [|discriminate].
