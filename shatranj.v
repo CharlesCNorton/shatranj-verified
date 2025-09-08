@@ -1564,43 +1564,14 @@ Proof.
                  (Z.eqb (fileZ to - fileZ from) 0)) eqn:E; [discriminate|].
   injection H. intros <- <-. clear H.
   apply andb_false_iff in E.
-  pose proof (Z.gcd_nonneg (rankZ to - rankZ from) (fileZ to - fileZ from)).
-  remember (Z.gcd (rankZ to - rankZ from) (fileZ to - fileZ from)) as g.
-  destruct (Z.eq_dec g 0).
-  - assert (Z.gcd (rankZ to - rankZ from) (fileZ to - fileZ from) = 0) by congruence.
-    apply Z.gcd_eq_0 in H0. destruct H0.
-    destruct E as [E|E]; apply Z.eqb_neq in E; congruence.
-  - assert (Hg: g > 0) by lia.
-    pose proof (Z.gcd_divide_l (rankZ to - rankZ from) (fileZ to - fileZ from)).
-    pose proof (Z.gcd_divide_r (rankZ to - rankZ from) (fileZ to - fileZ from)).
-    destruct H0 as [k1 Hk1], H1 as [k2 Hk2].
-    assert (Z.gcd ((rankZ to - rankZ from) / g) ((fileZ to - fileZ from) / g) = 1).
-    { rewrite <- Hk1, <- Hk2.
-      rewrite Z.mul_comm with (n := k1).
-      rewrite Z.mul_comm with (n := k2).
-      rewrite Z_div_mult_full, Z_div_mult_full; try lia.
-      rewrite <- Z.gcd_div_gcd; try lia.
-      rewrite Heqg, Z_div_same; lia. }
-    destruct (Z.eq_dec ((rankZ to - rankZ from) / g) 0).
-    + right. left. split; [assumption|].
-      assert ((fileZ to - fileZ from) / g <> 0).
-      { intro. apply Z.gcd_eq_0 in H1. lia. }
-      apply Z.gcd_1_rel_prime in H1.
-      apply Zrel_prime_neq_mod_0 in H1; try assumption.
-      simpl in H1.
-      assert (Z.abs ((fileZ to - fileZ from) / g) = 1).
-      { destruct ((fileZ to - fileZ from) / g); simpl in *; lia. }
-      exact H3.
-    + destruct (Z.eq_dec ((fileZ to - fileZ from) / g) 0).
-      * right. right. split; [assumption|].
-        assert ((rankZ to - rankZ from) / g <> 0) by assumption.
-        apply Z.gcd_1_rel_prime in H1.
-        apply Zrel_prime_neq_mod_0 in H1; try assumption.
-        simpl in H1.
-        assert (Z.abs ((rankZ to - rankZ from) / g) = 1).
-        { destruct ((rankZ to - rankZ from) / g); simpl in *; lia. }
-        exact H3.
-      * left. exact H1.
+  left.
+  assert (HG: Z.gcd (rankZ to - rankZ from) (fileZ to - fileZ from) <> 0).
+  { intro. apply Z.gcd_eq_0 in H. destruct H.
+    destruct E as [E|E]; apply Z.eqb_neq in E; congruence. }
+  rewrite <- (Z.gcd_div_gcd (rankZ to - rankZ from) (fileZ to - fileZ from) 
+                            (Z.gcd (rankZ to - rankZ from) (fileZ to - fileZ from))
+                            HG eq_refl).
+  reflexivity.
 Qed.
 
 (** * Validation *)
