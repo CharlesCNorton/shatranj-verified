@@ -3394,65 +3394,116 @@ Proof.
   injection H2. intro. exact H0.
 Qed.
 
+Lemma position_beq_refl : forall p,
+  position_beq p p = true.
+Proof.
+  intro p.
+  unfold position_beq.
+  destruct (position_eq_dec p p); [reflexivity|contradiction].
+Qed.
+
+Lemma position_beq_true_eq : forall p1 p2,
+  position_beq p1 p2 = true -> p1 = p2.
+Proof.
+  intros p1 p2 H.
+  unfold position_beq in H.
+  destruct (position_eq_dec p1 p2); [assumption|discriminate].
+Qed.
+
+Lemma position_beq_false_neq : forall p1 p2,
+  position_beq p1 p2 = false -> p1 <> p2.
+Proof.
+  intros p1 p2 H.
+  unfold position_beq in H.
+  destruct (position_eq_dec p1 p2); [discriminate|assumption].
+Qed.
+
+Lemma rukh_can_reach_zero_step : forall b from n,
+  rukh_can_reach_n b from 0 0 from (S n) = 
+  if empty b from then rukh_can_reach_n b from 0 0 from n else false.
+Proof.
+  intros b from n.
+  simpl.
+  rewrite offset_zero.
+  rewrite position_beq_refl.
+  reflexivity.
+Qed.
+
+Lemma rukh_can_reach_zero_base : forall b from,
+  rukh_can_reach_n b from 0 0 from 0 = false.
+Proof.
+  intros b from.
+  simpl.
+  reflexivity.
+Qed.
+
+Lemma rukh_can_reach_zero_one : forall b from,
+  rukh_can_reach_n b from 0 0 from 1 = 
+  if empty b from then false else false.
+Proof.
+  intros b from.
+  rewrite rukh_can_reach_zero_step.
+  rewrite rukh_can_reach_zero_base.
+  destruct (empty b from); reflexivity.
+Qed.
+
+Lemma rukh_can_reach_zero_zero_all_false : forall b from n,
+  rukh_can_reach_n b from 0 0 from n = false.
+Proof.
+  intros b from n.
+  induction n.
+  - apply rukh_can_reach_zero_base.
+  - rewrite rukh_can_reach_zero_step.
+    destruct (empty b from); [exact IHn|reflexivity].
+Qed.
+
+Lemma rukh_can_reach_zero_zero_false : forall b from to n,
+  rukh_can_reach_n b from 0 0 to n = false.
+Proof.
+  intros b from to n.
+  destruct (position_eq_dec from to).
+  - subst to. apply rukh_can_reach_zero_zero_all_false.
+  - destruct n.
+    + simpl. reflexivity.
+    + simpl. rewrite offset_zero.
+      unfold position_beq.
+      destruct (position_eq_dec from to); [contradiction|reflexivity].
+Qed.
+
+Lemma rukh_directions_non_zero : forall dr df,
+  In (dr, df) rukh_directions ->
+  ~(dr = 0 /\ df = 0).
+Proof.
+  intros dr df H.
+  unfold rukh_directions in H.
+  simpl in H.
+  destruct H as [H|[H|[H|[H|[]]]]]; 
+  injection H; intros <- <-; intro Hcontra; destruct Hcontra; discriminate.
+Qed.
+
+Lemma rukh_can_reach_not_zero_zero : forall b from dr df to n,
+  rukh_can_reach_n b from dr df to n = true ->
+  ~(dr = 0 /\ df = 0).
+Proof.
+  intros b from dr df to n H Hcontra.
+  destruct Hcontra as [Hdr Hdf].
+  subst dr df.
+  rewrite rukh_can_reach_zero_zero_false in H.
+  discriminate.
+Qed.
+
 Lemma rukh_can_reach_maintains_direction : forall b from dr df to n,
   rukh_can_reach_n b from dr df to n = true ->
   (dr = 0 /\ df <> 0) \/ (dr <> 0 /\ df = 0).
 Proof.
   intros b from dr df to n H.
-  destruct n; [simpl in H; discriminate|].
-  simpl in H.
-  destruct (offset from dr df) eqn:Hoff; [|discriminate].
-  unfold position_beq in H.
-  destruct (position_eq_dec p to).
-  - subst p.
-    assert (Hoff_copy := Hoff).
-    apply offset_preserves_board_validity in Hoff_copy.
-    destruct Hoff_copy as [Hr [Hf _]].
-    destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
-    + subst dr df.
-      exfalso.
-      rewrite offset_zero in Hoff.
-      injection Hoff. intro Heq. subst to.
-      clear Hoff Hr Hf.
-      simpl in H.
-      rewrite offset_zero in H.
-      unfold position_beq in H.
-      destruct (position_eq_dec from from); [|contradiction].
-      destruct (empty b from); discriminate.
-    + left. split; assumption.
-    + right. split; assumption.
-    + right. split; assumption.
-  - destruct (empty b p); [|discriminate].
-    revert H. generalize n. clear n.
-    induction n0; intros H0.
-    + simpl in H0. discriminate.
-    + simpl in H0.
-      destruct (offset p dr df) eqn:Hoff2; [|discriminate].
-      destruct (position_beq p0 to).
-      * destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
-        -- subst. left. split; [reflexivity|].
-           intro. subst. rewrite Z.add_0_r in *.
-           assert (Hoff_c := Hoff).
-           apply offset_preserves_board_validity in Hoff_c.
-           destruct Hoff_c as [_ [Hf2 _]].
-           assert (Hoff2_c := Hoff2).
-           apply offset_preserves_board_validity in Hoff2_c.
-           destruct Hoff2_c as [_ [Hf3 _]].
-           rewrite Hf2 in Hf3.
-           rewrite Z.add_0_r in Hf3.
-           assert (p = p0).
-           { apply position_ext;
-             [apply rankZ_injective; ring|
-              apply fileZ_injective; exact Hf3]. }
-           subst p0.
-           unfold position_beq in H1.
-           destruct (position_eq_dec p to); [|discriminate].
-           contradiction.
-        -- left. split; assumption.
-        -- right. split; assumption.
-        -- right. split; assumption.
-      * destruct (empty b p0); [|discriminate].
-        apply IHn0. exact H0.
+  assert (Hnz: ~(dr = 0 /\ df = 0)).
+  { apply rukh_can_reach_not_zero_zero with b from to n. exact H. }
+  destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
+  - exfalso. apply Hnz. split; assumption.
+  - left. split; assumption.
+  - right. split; assumption.
+  - right. split; assumption.
 Qed.
 
 Lemma rukh_orthogonal_movement : forall b from dr df to n,
