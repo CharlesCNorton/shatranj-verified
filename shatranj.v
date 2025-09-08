@@ -777,7 +777,7 @@ Qed.
 
 (** * Cardinality *)
 
-Definition finite_card {A: Type} `{Finite A} : nat := length (@enum A H).
+Definition finite_card {A: Type} `{FA: Finite A} : nat := List.length (@enum A FA).
 
 Lemma fin8_card : @finite_card Fin8 _ = 8.
 Proof.
@@ -824,7 +824,7 @@ Definition fin8_pred (f: Fin8) : option Fin8 :=
   match fin8_to_nat f with
   | 0 => None
   | S n' => match lt_dec n' 8 with
-            | left H => Some (nat_to_fin8 n' H)
+            | left H => Some (@nat_to_fin8 n' H)
             | right _ => None
             end
   end.
@@ -832,8 +832,9 @@ Definition fin8_pred (f: Fin8) : option Fin8 :=
 Definition fin8_succ (f: Fin8) : option Fin8 :=
   let n := fin8_to_nat f in
   match lt_dec (S n) 8 with
-  | left H => Some (nat_to_fin8 (S n) H)
+  | left H => Some (@nat_to_fin8 (S n) H)
   | right _ => None
   end.
 
 (** * End of Section 2: Finite Domain Theory *)
+  
