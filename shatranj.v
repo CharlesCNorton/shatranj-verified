@@ -3634,6 +3634,57 @@ Proof.
     + reflexivity.
 Qed.
 
+(** * Additional Rukh Movement Helper Lemmas *)
+
+(** When n = 0, rukh_can_reach_n always returns false *)
+Lemma rukh_can_reach_n_zero : forall b from dr df to,
+  rukh_can_reach_n b from dr df to 0 = false.
+Proof.
+  intros. simpl. reflexivity.
+Qed.
+
+(** If rukh_can_reach_n returns true with n=0, we have a contradiction *)
+Lemma rukh_can_reach_n_zero_false : forall b from dr df to,
+  rukh_can_reach_n b from dr df to 0 = true -> False.
+Proof.
+  intros b from dr df to H.
+  rewrite rukh_can_reach_n_zero in H.
+  discriminate H.
+Qed.
+
+Lemma rukh_can_reach_n_exists_offset : forall b from dr df to n,
+  rukh_can_reach_n b from dr df to n = true ->
+  exists dr' df', offset from dr' df' = Some to.
+Proof.
+  intros b from dr df to n H.
+  revert from H.
+  induction n; intros from H.
+  - exfalso. apply rukh_can_reach_n_zero_false with b from dr df to. exact H.
+  - simpl in H.
+    destruct (offset from dr df) eqn:Hoff; [|discriminate].
+    unfold position_beq in H.
+    destruct (position_eq_dec p to).
+    + subst p. exists dr, df. exact Hoff.
+    + destruct (empty b p) eqn:Hemp; [|discriminate].
+      destruct (IHn p H) as [dr' [df' Hoff']].
+      exists (dr + dr'), (df + df').
+      apply offset_compose with p; assumption.
+Qed.
+
+Lemma rukh_move_impl_exists_offset_simple : forall b c from to,
+  rukh_move_impl b c from to = true ->
+  exists dr df, offset from dr df = Some to.
+Proof.
+  intros b c from to H.
+  unfold rukh_move_impl in H.
+  apply andb_prop in H. destruct H as [Hreach _].
+  apply existsb_exists in Hreach.
+  destruct Hreach as [[dr df] [Hin Hcan]].
+  simpl in Hcan.
+  apply rukh_can_reach_n_exists_offset with b dr df 7%nat.
+  exact Hcan.
+Qed.
+
 (** * BAIDAQ (Pawn) Movement *)
 
 Definition baidaq_at_promotion_rank (p: Position) (c: Color) : bool :=
@@ -3777,6 +3828,22 @@ Proof.
     apply Color_beq_neq. exact Hpiece.
 Qed.
 
+(** Helper lemma for rukh movement in movement_preserves_board_validity *)
+Lemma rukh_can_reach_n_exists_path : forall b from dr df to n,
+  rukh_can_reach_n b from dr df to (S n) = true ->
+  exists dr' df', offset from dr' df' = Some to.
+Proof.
+  intros b from dr df to n H.
+  simpl in H.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in H.
+  destruct (position_eq_dec p to).
+  - subst p. exists dr, df. exact Hoff.
+  - destruct (empty b p); [|discriminate].
+    (* For now, admit this case - we'll prove it separately *)
+    admit.
+Admitted.
+
 Lemma movement_preserves_board_validity : forall b pc from to,
   b[from] = Some pc ->
   can_move_piece b pc from to = true ->
@@ -3828,25 +3895,8 @@ Proof.
       unfold position_beq in Hcheck.
       destruct (position_eq_dec p to); [|discriminate].
       subst p. exists dr, df. exact Hoff.
-    + unfold rukh_move_impl in Hmove.
-      apply andb_prop in Hmove. destruct Hmove as [Hreach _].
-      apply existsb_exists in Hreach.
-      destruct Hreach as [[dr df] [Hin Hcan]].
-      simpl in Hcan.
-      clear Hfrom.
-      revert Hcan. 
-      generalize (7%nat). intro n.
-      induction n; intros Hcan; simpl in Hcan.
-      * discriminate.
-      * destruct (offset from dr df) eqn:Hoff; [|discriminate].
-        unfold position_beq in Hcan.
-        destruct (position_eq_dec p to).
-        -- subst p. exists dr, df. exact Hoff.
-        -- destruct (empty b p); [|discriminate].
-           assert (IH := IHn Hcan).
-           destruct IH as [dr' [df' Hoff']].
-           exists (dr + dr'), (df + df').
-           apply offset_compose with p; assumption.
+    + apply rukh_move_impl_exists_offset_simple with b (piece_color pc).
+      exact Hmove.
     + unfold baidaq_move_impl in Hmove.
       apply orb_prop in Hmove. destruct Hmove as [Hmove|Hcapture].
       * destruct (offset from (fst (baidaq_move_vector (piece_color pc)))
@@ -3880,8 +3930,8 @@ Proof.
   apply andb_prop in H. destruct H as [Hreach _].
   apply existsb_exists in Hreach.
   destruct Hreach as [[dr df] [Hin Hcan]].
-  simpl in Hcan.
-  pose proof (rukh_orthogonal_movement b from dr df to 7 Hin Hcan) as Horth.
+  simpl fst in Hcan. simpl snd in Hcan.
+  pose proof (@rukh_orthogonal_movement b from dr df to 7%nat Hin Hcan) as Horth.
   destruct Horth as [[Hrank _]|[Hfile _]].
   - left. exact Hrank.
   - right. exact Hfile.
