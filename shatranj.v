@@ -3057,9 +3057,9 @@ Definition shah_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
 Lemma Color_beq_eq : forall c1 c2,
   Color_beq c1 c2 = true <-> c1 = c2.
 Proof.
-  intros [] []; simpl; split; intro H; 
-    [reflexivity|reflexivity|discriminate|discriminate|
-     discriminate|reflexivity|discriminate|reflexivity].
+  intros c1 c2. split.
+  - intro H. destruct c1, c2; simpl in H; try discriminate; reflexivity.
+  - intro H. subst. destruct c2; reflexivity.
 Qed.
 
 Lemma Color_beq_neq : forall c1 c2,
@@ -3088,7 +3088,7 @@ Proof.
   destruct (offset from dr df) eqn:Hoff; [|discriminate].
   unfold position_beq in Hcheck.
   destruct (position_eq_dec p to); [|discriminate].
-  subst p. split; [exact Hoff|].
+  subst p. split; [reflexivity|].
   unfold occupied_by in Hoccupy.
   destruct (b[to]) eqn:Hbto.
   - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
@@ -3145,7 +3145,7 @@ Proof.
   destruct (offset from dr df) eqn:Hoff; [|discriminate].
   unfold position_beq in Hcheck.
   destruct (position_eq_dec p to); [|discriminate].
-  subst p. split; [exact Hoff|].
+  subst p. split; [reflexivity|].
   unfold occupied_by in Hoccupy.
   destruct (b[to]) eqn:Hbto.
   - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
@@ -3202,7 +3202,7 @@ Proof.
   destruct (offset from dr df) eqn:Hoff; [|discriminate].
   unfold position_beq in Hcheck.
   destruct (position_eq_dec p to); [|discriminate].
-  subst p. split; [exact Hoff|].
+  subst p. split; [reflexivity|].
   unfold occupied_by in Hoccupy.
   destruct (b[to]) eqn:Hbto.
   - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
@@ -3259,7 +3259,7 @@ Proof.
   destruct (offset from dr df) eqn:Hoff; [|discriminate].
   unfold position_beq in Hcheck.
   destruct (position_eq_dec p to); [|discriminate].
-  subst p. split; [exact Hoff|].
+  subst p. split; [reflexivity|].
   unfold occupied_by in Hoccupy.
   destruct (b[to]) eqn:Hbto.
   - simpl in Hoccupy. apply negb_true_iff in Hoccupy.
@@ -3289,11 +3289,11 @@ Qed.
 (** * RUKH (Rook) Movement *)
 
 Definition rukh_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
-  exists dr df n,
+  exists dr df (n: nat),
     In (dr, df) rukh_directions /\
-    n > 0 /\
+    (n > 0)%nat /\
     offset from (Z.of_nat n * dr) (Z.of_nat n * df) = Some to /\
-    (forall k, 0 < k < n -> 
+    (forall k, (0 < k < n)%nat -> 
       exists p, offset from (Z.of_nat k * dr) (Z.of_nat k * df) = Some p /\
                 empty b p = true) /\
     match b[to] with
@@ -3349,6 +3349,51 @@ Proof.
   destruct (position_eq_dec to to); [reflexivity|contradiction].
 Qed.
 
+Lemma rankZ_injective : forall p1 p2,
+  rankZ p1 = rankZ p2 ->
+  pos_rank p1 = pos_rank p2.
+Proof.
+  intros p1 p2 H.
+  unfold rankZ in H.
+  assert (fin8_to_nat (rank_val (pos_rank p1)) = 
+          fin8_to_nat (rank_val (pos_rank p2))).
+  { apply Nat2Z.inj. exact H. }
+  destruct (pos_rank p1) as [r1], (pos_rank p2) as [r2].
+  simpl in H0.
+  f_equal.
+  revert H0.
+  pattern r1. apply fin8_exhaustive;
+  pattern r2; apply fin8_exhaustive;
+  simpl; intro H0; try discriminate; reflexivity.
+Qed.
+
+Lemma fileZ_injective : forall p1 p2,
+  fileZ p1 = fileZ p2 ->
+  pos_file p1 = pos_file p2.
+Proof.
+  intros p1 p2 H.
+  unfold fileZ in H.
+  assert (fin8_to_nat (file_val (pos_file p1)) = 
+          fin8_to_nat (file_val (pos_file p2))).
+  { apply Nat2Z.inj. exact H. }
+  destruct (pos_file p1) as [f1], (pos_file p2) as [f2].
+  simpl in H0.
+  f_equal.
+  revert H0.
+  pattern f1. apply fin8_exhaustive;
+  pattern f2; apply fin8_exhaustive;
+  simpl; intro H0; try discriminate; reflexivity.
+Qed.
+
+Lemma offset_nonzero : forall p,
+  offset p 0 0 = Some p ->
+  forall q, offset p 0 0 = Some q -> p = q.
+Proof.
+  intros p H q H2.
+  rewrite offset_zero in H, H2.
+  injection H2. intro. exact H0.
+Qed.
+
 Lemma rukh_can_reach_maintains_direction : forall b from dr df to n,
   rukh_can_reach_n b from dr df to n = true ->
   (dr = 0 /\ df <> 0) \/ (dr <> 0 /\ df = 0).
@@ -3360,15 +3405,20 @@ Proof.
   unfold position_beq in H.
   destruct (position_eq_dec p to).
   - subst p.
-    apply offset_preserves_board_validity in Hoff.
-    destruct Hoff as [Hr [Hf _]].
+    assert (Hoff_copy := Hoff).
+    apply offset_preserves_board_validity in Hoff_copy.
+    destruct Hoff_copy as [Hr [Hf _]].
     destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
-    + subst. rewrite Z.add_0_r in Hr, Hf. 
-      assert (from = to).
-      { apply position_ext; 
-        [apply rankZ_injective; exact Hr|
-         apply fileZ_injective; exact Hf]. }
-      contradiction (offset_nonzero from).
+    + subst dr df.
+      exfalso.
+      rewrite offset_zero in Hoff.
+      injection Hoff. intro Heq. subst to.
+      clear Hoff Hr Hf.
+      simpl in H.
+      rewrite offset_zero in H.
+      unfold position_beq in H.
+      destruct (position_eq_dec from from); [|contradiction].
+      destruct (empty b from); discriminate.
     + left. split; assumption.
     + right. split; assumption.
     + right. split; assumption.
@@ -3382,10 +3432,12 @@ Proof.
       * destruct (Z.eq_dec dr 0), (Z.eq_dec df 0).
         -- subst. left. split; [reflexivity|].
            intro. subst. rewrite Z.add_0_r in *.
-           apply offset_preserves_board_validity in Hoff.
-           destruct Hoff as [_ [Hf2 _]].
-           apply offset_preserves_board_validity in Hoff2.
-           destruct Hoff2 as [_ [Hf3 _]].
+           assert (Hoff_c := Hoff).
+           apply offset_preserves_board_validity in Hoff_c.
+           destruct Hoff_c as [_ [Hf2 _]].
+           assert (Hoff2_c := Hoff2).
+           apply offset_preserves_board_validity in Hoff2_c.
+           destruct Hoff2_c as [_ [Hf3 _]].
            rewrite Hf2 in Hf3.
            rewrite Z.add_0_r in Hf3.
            assert (p = p0).
@@ -3401,49 +3453,6 @@ Proof.
         -- right. split; assumption.
       * destruct (empty b p0); [|discriminate].
         apply IHn0. exact H0.
-Qed.
-
-Lemma rankZ_injective : forall p1 p2,
-  rankZ p1 = rankZ p2 ->
-  pos_rank p1 = pos_rank p2.
-Proof.
-  intros p1 p2 H.
-  unfold rankZ in H.
-  assert (fin8_to_nat (rank_val (pos_rank p1)) = 
-          fin8_to_nat (rank_val (pos_rank p2))).
-  { apply Nat2Z.inj. exact H. }
-  destruct (pos_rank p1) as [r1], (pos_rank p2) as [r2].
-  simpl in H0.
-  f_equal.
-  apply fin8_exhaustive with (f := r1);
-  apply fin8_exhaustive with (f := r2);
-  simpl in H0; try discriminate; reflexivity.
-Qed.
-
-Lemma fileZ_injective : forall p1 p2,
-  fileZ p1 = fileZ p2 ->
-  pos_file p1 = pos_file p2.
-Proof.
-  intros p1 p2 H.
-  unfold fileZ in H.
-  assert (fin8_to_nat (file_val (pos_file p1)) = 
-          fin8_to_nat (file_val (pos_file p2))).
-  { apply Nat2Z.inj. exact H. }
-  destruct (pos_file p1) as [f1], (pos_file p2) as [f2].
-  simpl in H0.
-  f_equal.
-  apply fin8_exhaustive with (f := f1);
-  apply fin8_exhaustive with (f := f2);
-  simpl in H0; try discriminate; reflexivity.
-Qed.
-
-Lemma offset_nonzero : forall p,
-  offset p 0 0 = Some p ->
-  forall q, offset p 0 0 = Some q -> p = q.
-Proof.
-  intros p H q H2.
-  rewrite offset_zero in H, H2.
-  injection H2. intro. exact H0.
 Qed.
 
 Lemma rukh_orthogonal_movement : forall b from dr df to n,
@@ -3629,7 +3638,7 @@ Proof.
     apply andb_prop in Hcheck. destruct Hcheck as [Hpos Hpiece].
     unfold position_beq in Hpos.
     destruct (position_eq_dec p to); [|discriminate].
-    subst p. split; [exact Hoff|].
+    subst p. split; [reflexivity|].
     destruct (b[to]) eqn:Hbto; [|discriminate].
     exists p0. split; [reflexivity|].
     apply negb_true_iff in Hpiece.
