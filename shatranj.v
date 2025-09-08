@@ -1134,58 +1134,166 @@ Proof.
   exfalso. simpl in Hbound. lia.
 Qed.
 
+(** First tiny helper: Z_to_rank preserves bounds *)
+Lemma Z_to_rank_bounds : forall z r,
+  Z_to_rank z = Some r -> 0 <= z < 8.
+Proof.
+  intros z r H.
+  unfold Z_to_rank in H.
+  destruct (Z_lt_dec z 0); [discriminate|].
+  destruct (Z_lt_dec z 8); [lia|discriminate].
+Qed.
+
+(** Second tiny helper: Z_to_file preserves bounds *)
+Lemma Z_to_file_bounds : forall z f,
+  Z_to_file z = Some f -> 0 <= z < 8.
+Proof.
+  intros z f H.
+  unfold Z_to_file in H.
+  destruct (Z_lt_dec z 0); [discriminate|].
+  destruct (Z_lt_dec z 8); [lia|discriminate].
+Qed.
+
+(** Third helper: offset succeeds implies bounds *)
+Lemma offset_Some_bounds : forall p dr df p',
+  offset p dr df = Some p' ->
+  0 <= rankZ p + dr < 8 /\ 0 <= fileZ p + df < 8.
+Proof.
+  intros p dr df p' H.
+  unfold offset in H.
+  destruct (Z_to_rank (rankZ p + dr)) eqn:Hr; [|discriminate].
+  destruct (Z_to_file (fileZ p + df)) eqn:Hf; [|discriminate].
+  split.
+  - apply Z_to_rank_bounds with r. exact Hr.
+  - apply Z_to_file_bounds with f. exact Hf.
+Qed.
+
+(** Fourth helper: Z_to_rank creates the expected rank *)
+Lemma Z_to_rank_creates : forall z,
+  0 <= z < 8 ->
+  Z_to_rank z = Some (mkRank (nat_to_fin8_aux (Z.to_nat z))).
+Proof.
+  intros z Hz.
+  unfold Z_to_rank.
+  destruct (Z_lt_dec z 0); [lia|].
+  destruct (Z_lt_dec z 8); [reflexivity|lia].
+Qed.
+
+(** Fifth helper: Z_to_file creates the expected file *)
+Lemma Z_to_file_creates : forall z,
+  0 <= z < 8 ->
+  Z_to_file z = Some (mkFile (nat_to_fin8_aux (Z.to_nat z))).
+Proof.
+  intros z Hz.
+  unfold Z_to_file.
+  destruct (Z_lt_dec z 0); [lia|].
+  destruct (Z_lt_dec z 8); [reflexivity|lia].
+Qed.
+
+(** Sixth helper: rankZ of constructed position *)
+Lemma rankZ_mkPosition_nat : forall z1 z2,
+  0 <= z1 < 8 -> 0 <= z2 < 8 ->
+  rankZ (mkPosition 
+    (mkRank (nat_to_fin8_aux (Z.to_nat z1)))
+    (mkFile (nat_to_fin8_aux (Z.to_nat z2)))) = z1.
+Proof.
+  intros z1 z2 H1 H2.
+  unfold rankZ. simpl.
+  apply nat_to_fin8_aux_roundtrip. exact H1.
+Qed.
+
+(** Seventh helper: fileZ of constructed position *)
+Lemma fileZ_mkPosition_nat : forall z1 z2,
+  0 <= z1 < 8 -> 0 <= z2 < 8 ->
+  fileZ (mkPosition 
+    (mkRank (nat_to_fin8_aux (Z.to_nat z1)))
+    (mkFile (nat_to_fin8_aux (Z.to_nat z2)))) = z2.
+Proof.
+  intros z1 z2 H1 H2.
+  unfold fileZ. simpl.
+  apply nat_to_fin8_aux_roundtrip. exact H2.
+Qed.
+
+(** Eighth helper: offset creates expected position *)
+Lemma offset_creates_position : forall p dr df,
+  0 <= rankZ p + dr < 8 ->
+  0 <= fileZ p + df < 8 ->
+  offset p dr df = Some (mkPosition
+    (mkRank (nat_to_fin8_aux (Z.to_nat (rankZ p + dr))))
+    (mkFile (nat_to_fin8_aux (Z.to_nat (fileZ p + df))))).
+Proof.
+  intros p dr df Hr Hf.
+  unfold offset.
+  rewrite Z_to_rank_creates by exact Hr.
+  rewrite Z_to_file_creates by exact Hf.
+  reflexivity.
+Qed.
+
+(** Now the main lemma using all helpers *)
 Lemma offset_compose : forall p1 p2 p3 dr1 df1 dr2 df2,
   offset p1 dr1 df1 = Some p2 ->
   offset p2 dr2 df2 = Some p3 ->
   offset p1 (dr1 + dr2) (df1 + df2) = Some p3.
 Proof.
   intros p1 p2 p3 dr1 df1 dr2 df2 H1 H2.
-  unfold offset in *.
-  case_eq (Z_to_rank (rankZ p1 + dr1)); [intros r1 Hr1|intro Hr1]; rewrite Hr1 in H1; [|discriminate].
-  case_eq (Z_to_file (fileZ p1 + df1)); [intros f1 Hf1|intro Hf1]; rewrite Hf1 in H1; [|discriminate].
-  injection H1; intro Hp2; subst p2; clear H1.
-  simpl in H2.
-  case_eq (Z_to_rank (rankZ (mkPosition r1 f1) + dr2)); [intros r2 Hr2|intro Hr2]; rewrite Hr2 in H2; [|discriminate].
-  case_eq (Z_to_file (fileZ (mkPosition r1 f1) + df2)); [intros f2 Hf2|intro Hf2]; rewrite Hf2 in H2; [|discriminate].
-  injection H2; intro Hp3; subst p3; clear H2.
   
-  apply Z_to_rank_Some in Hr1. destruct Hr1 as [Hrbounds1 Hr1eq].
-  apply Z_to_file_Some in Hf1. destruct Hf1 as [Hfbounds1 Hf1eq].
-  apply Z_to_rank_Some in Hr2. destruct Hr2 as [Hrbounds2 Hr2eq].
-  apply Z_to_file_Some in Hf2. destruct Hf2 as [Hfbounds2 Hf2eq].
+  assert (B1: 0 <= rankZ p1 + dr1 < 8 /\ 0 <= fileZ p1 + df1 < 8).
+  { apply offset_Some_bounds with p2. exact H1. }
+  destruct B1 as [Hrbounds1 Hfbounds1].
   
-  subst r1 f1.
-  unfold rankZ, fileZ in Hr2eq, Hf2eq, Hrbounds2, Hfbounds2. simpl in *.
-  rewrite nat_to_fin8_aux_roundtrip in Hrbounds2, Hfbounds2 by assumption.
+  assert (B2: 0 <= rankZ p2 + dr2 < 8 /\ 0 <= fileZ p2 + df2 < 8).
+  { apply offset_Some_bounds with p3. exact H2. }
+  destruct B2 as [Hrbounds2' Hfbounds2'].
   
-  replace (rankZ p1 + (dr1 + dr2)) with ((rankZ p1 + dr1) + dr2) by ring.
-  replace (fileZ p1 + (df1 + df2)) with ((fileZ p1 + df1) + df2) by ring.
+  assert (Hp2: p2 = mkPosition
+    (mkRank (nat_to_fin8_aux (Z.to_nat (rankZ p1 + dr1))))
+    (mkFile (nat_to_fin8_aux (Z.to_nat (fileZ p1 + df1))))).
+  { 
+    assert (E: offset p1 dr1 df1 = Some (mkPosition
+      (mkRank (nat_to_fin8_aux (Z.to_nat (rankZ p1 + dr1))))
+      (mkFile (nat_to_fin8_aux (Z.to_nat (fileZ p1 + df1)))))).
+    { apply offset_creates_position; assumption. }
+    rewrite E in H1. injection H1. auto.
+  }
   
-  unfold Z_to_rank, Z_to_file.
-  destruct (Z_lt_dec ((rankZ p1 + dr1) + dr2) 0).
-  { clear - Hrbounds1 Hrbounds2. lia. }
-  destruct (Z_lt_dec ((rankZ p1 + dr1) + dr2) 8); [|lia].
-  destruct (Z_lt_dec ((fileZ p1 + df1) + df2) 0); [lia|].
-  destruct (Z_lt_dec ((fileZ p1 + df1) + df2) 8); [|lia].
+  rewrite Hp2 in Hrbounds2', Hfbounds2'.
+  rewrite rankZ_mkPosition_nat in Hrbounds2' by assumption.
+  rewrite fileZ_mkPosition_nat in Hfbounds2' by assumption.
   
-  subst r2 f2.
+  assert (Hp3: p3 = mkPosition
+    (mkRank (nat_to_fin8_aux (Z.to_nat ((rankZ p1 + dr1) + dr2))))
+    (mkFile (nat_to_fin8_aux (Z.to_nat ((fileZ p1 + df1) + df2))))).
+  { 
+    assert (E: offset p2 dr2 df2 = Some (mkPosition
+      (mkRank (nat_to_fin8_aux (Z.to_nat ((rankZ p1 + dr1) + dr2))))
+      (mkFile (nat_to_fin8_aux (Z.to_nat ((fileZ p1 + df1) + df2)))))).
+    { 
+      rewrite Hp2.
+      unfold offset.
+      rewrite Z_to_rank_creates.
+      2: { unfold rankZ. simpl. rewrite nat_to_fin8_aux_roundtrip by exact Hrbounds1. exact Hrbounds2'. }
+      rewrite Z_to_file_creates.
+      2: { unfold fileZ. simpl. rewrite nat_to_fin8_aux_roundtrip by exact Hfbounds1. exact Hfbounds2'. }
+      f_equal. f_equal.
+      - f_equal. unfold rankZ. simpl. 
+        rewrite nat_to_fin8_aux_roundtrip by exact Hrbounds1. 
+        reflexivity.
+      - f_equal. unfold fileZ. simpl.
+        rewrite nat_to_fin8_aux_roundtrip by exact Hfbounds1.
+        reflexivity.
+    }
+    rewrite E in H2. injection H2. auto.
+  }
+  
+  rewrite Hp3.
+  unfold offset.
+  rewrite Z_to_rank_creates.
+  2: { replace (rankZ p1 + (dr1 + dr2)) with ((rankZ p1 + dr1) + dr2) by ring. exact Hrbounds2'. }
+  rewrite Z_to_file_creates.
+  2: { replace (fileZ p1 + (df1 + df2)) with ((fileZ p1 + df1) + df2) by ring. exact Hfbounds2'. }
   f_equal. f_equal.
-  - f_equal.
-    unfold rankZ, fileZ. simpl.
-    rewrite nat_to_fin8_aux_roundtrip by assumption.
-    assert (Z.to_nat ((rankZ p1 + dr1) + dr2) < 8)%nat.
-    { apply Nat2Z.inj_lt. rewrite Z2Nat.id; lia. }
-    remember (Z.to_nat ((rankZ p1 + dr1) + dr2)) as n.
-    destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; try reflexivity.
-    exfalso. simpl in H. lia.
-  - f_equal.
-    unfold rankZ, fileZ. simpl.
-    rewrite nat_to_fin8_aux_roundtrip by assumption.
-    assert (Z.to_nat ((fileZ p1 + df1) + df2) < 8)%nat.
-    { apply Nat2Z.inj_lt. rewrite Z2Nat.id; lia. }
-    remember (Z.to_nat ((fileZ p1 + df1) + df2)) as n.
-    destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; try reflexivity.
-    exfalso. simpl in H. lia.
+  - f_equal. f_equal. f_equal. ring.
+  - f_equal. f_equal. f_equal. ring.
 Qed.
 
 (** * Position Enumeration *)
@@ -1543,3 +1651,4 @@ Qed.
 (** * End of Section 3: Position Abstraction *)
 
 Close Scope Z_scope.
+          
