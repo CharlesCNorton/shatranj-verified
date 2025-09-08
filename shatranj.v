@@ -732,36 +732,52 @@ Definition fin8_bij_nat (f: Fin8) : {n: nat | n < 8} :=
 Definition nat_bij_fin8 (sn: {n: nat | n < 8}) : Fin8 :=
   nat_to_fin8_aux (proj1_sig sn).
 
-Lemma nat_fin8_round_trip : forall n (H: n < 8),
-  fin8_to_nat ((nat_to_fin8) n H) = n.
-Proof.
+Lemma nat_fin8_round_trip : forall n H,
+  fin8_to_nat (@nat_to_fin8 n H) = n.
+  Proof.
   intros n H.
   unfold fin8_to_nat, nat_to_fin8.
-  destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]]; try lia;
-    simpl; reflexivity.
-Qed.
-
-Lemma fin8_bij_inv1 : forall f,
-  nat_bij_fin8 (fin8_bij_nat f) = f.
-Proof.
-  intro f. unfold nat_bij_fin8, fin8_bij_nat.
-  simpl. unfold fin8_to_nat.
-  destruct (Fin.to_nat f) as [n Hn]. simpl.
-  generalize dependent f.
-  intros f Hn.
-  apply (Fin.caseS' f); intro; reflexivity.
+  destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]].
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - exfalso. simpl in H. lia.
 Qed.
 
 Lemma fin8_bij_inv2 : forall sn,
   fin8_bij_nat (nat_bij_fin8 sn) = sn.
 Proof.
   intros [n H]. unfold fin8_bij_nat, nat_bij_fin8.
-  simpl. f_equal. apply nat_fin8_round_trip.
+  simpl. unfold fin8_to_nat, nat_to_fin8_aux.
+  destruct n as [|[|[|[|[|[|[|[|n8]]]]]]]].
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - simpl. f_equal. apply proof_irrelevance_axiom.
+  - exfalso. simpl in H. lia.
+Qed.
+
+Lemma fin8_bij_inv1 : forall f,
+  nat_bij_fin8 (fin8_bij_nat f) = f.
+Proof.
+  intro f. unfold nat_bij_fin8, fin8_bij_nat.
+  simpl. unfold fin8_to_nat, nat_to_fin8_aux.
+  apply fin8_exhaustive with (f := f);
+    (simpl; reflexivity).
 Qed.
 
 (** * Cardinality *)
 
-Definition finite_card {A: Type} `{Finite A} : nat := length enum.
+Definition finite_card {A: Type} `{Finite A} : nat := length (@enum A H).
 
 Lemma fin8_card : @finite_card Fin8 _ = 8.
 Proof.
