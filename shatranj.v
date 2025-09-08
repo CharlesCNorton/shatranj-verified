@@ -2020,4 +2020,428 @@ Proof.
 Qed.
 
 (** * End of Section 4: Core Game Ontology *)
- 
+
+(* ========================================================================= *)
+(* SECTION 5: BOARD ABSTRACTION                                             *)
+(* ========================================================================= *)
+
+(** * Board Type Definition *)
+
+Definition Board : Type := Position -> option Piece.
+
+(** * Board Access Notation *)
+
+Notation "b [ p ]" := (b p) (at level 1).
+Notation "b [ p := pc ]" := 
+  (fun p' => if position_eq_dec p p' then pc else b p')
+  (at level 1).
+
+(** * Board Equality *)
+
+Definition board_eq (b1 b2: Board) : Prop :=
+  forall p, b1[p] = b2[p].
+
+Notation "b1 '==' b2" := (board_eq b1 b2) (at level 70).
+
+Lemma board_eq_refl : forall b, b == b.
+Proof.
+  intros b p. reflexivity.
+Qed.
+
+Lemma board_eq_sym : forall b1 b2, b1 == b2 -> b2 == b1.
+Proof.
+  intros b1 b2 H p. symmetry. apply H.
+Qed.
+
+Lemma board_eq_trans : forall b1 b2 b3, 
+  b1 == b2 -> b2 == b3 -> b1 == b3.
+Proof.
+  intros b1 b2 b3 H12 H23 p.
+  transitivity (b2[p]); [apply H12 | apply H23].
+Qed.
+
+(** * Board Setoid Instance *)
+
+Require Import Coq.Classes.Equivalence.
+
+#[global]
+Instance board_equiv : Equivalence board_eq := {
+  Equivalence_Reflexive := board_eq_refl;
+  Equivalence_Symmetric := board_eq_sym;
+  Equivalence_Transitive := board_eq_trans
+}.
+
+(** * Board Update Operations *)
+
+Definition board_set (b: Board) (p: Position) (pc: option Piece) : Board :=
+  b[p := pc].
+
+Definition board_get (b: Board) (p: Position) : option Piece :=
+  b[p].
+
+Definition board_remove (b: Board) (p: Position) : Board :=
+  b[p := None].
+
+Definition board_place (b: Board) (p: Position) (pc: Piece) : Board :=
+  b[p := Some pc].
+
+Definition board_move (b: Board) (from to: Position) : Board :=
+  match b[from] with
+  | Some pc => (b[from := None])[to := Some pc]
+  | None => b
+  end.
+
+(** * Board Update Properties *)
+
+Lemma board_set_get_same : forall b p pc,
+  board_get (board_set b p pc) p = pc.
+Proof.
+  intros b p pc. unfold board_get, board_set.
+  destruct (position_eq_dec p p); [reflexivity|contradiction].
+Qed.
+
+Lemma board_set_get_other : forall b p1 p2 pc,
+  p1 <> p2 ->
+  board_get (board_set b p1 pc) p2 = board_get b p2.
+Proof.
+  intros b p1 p2 pc H. unfold board_get, board_set.
+  destruct (position_eq_dec p1 p2); [contradiction|reflexivity].
+Qed.
+
+Lemma board_set_set_same : forall b p pc1 pc2,
+  board_set (board_set b p pc1) p pc2 == board_set b p pc2.
+Proof.
+  intros b p pc1 pc2 p'. unfold board_set.
+  destruct (position_eq_dec p p'); reflexivity.
+Qed.
+
+Lemma board_set_set_comm : forall b p1 p2 pc1 pc2,
+  p1 <> p2 ->
+  board_set (board_set b p1 pc1) p2 pc2 == 
+  board_set (board_set b p2 pc2) p1 pc1.
+Proof.
+  intros b p1 p2 pc1 pc2 H p'. unfold board_set.
+  destruct (position_eq_dec p1 p'), (position_eq_dec p2 p'); 
+    subst; try reflexivity; try contradiction.
+Qed.
+
+(** * Board Predicates *)
+
+Definition occupied (b: Board) (p: Position) : bool :=
+  match b[p] with
+  | Some _ => true
+  | None => false
+  end.
+
+Definition occupied_by (b: Board) (p: Position) (c: Color) : bool :=
+  match b[p] with
+  | Some pc => Color_beq (piece_color pc) c
+  | None => false
+  end.
+
+Definition empty (b: Board) (p: Position) : bool :=
+  negb (occupied b p).
+
+Definition has_piece_type (b: Board) (p: Position) (pt: PieceType) : bool :=
+  match b[p] with
+  | Some pc => PieceType_beq (piece_type pc) pt
+  | None => false
+  end.
+
+(** * Empty Board *)
+
+Definition empty_board : Board := fun _ => None.
+
+Lemma empty_board_empty : forall p, 
+  empty empty_board p = true.
+Proof.
+  intro p. reflexivity.
+Qed.
+
+(** * Initial Position Setup - Standard Configuration *)
+
+Definition initial_rank_setup (c: Color) : Position -> option Piece :=
+  fun p =>
+    let r := if Color_beq c White then rank1 else rank8 in
+    if rank_eq_dec (pos_rank p) r then
+      if file_eq_dec (pos_file p) fileA then Some (mkPiece c Rukh)
+      else if file_eq_dec (pos_file p) fileB then Some (mkPiece c Faras)
+      else if file_eq_dec (pos_file p) fileC then Some (mkPiece c Alfil)
+      else if file_eq_dec (pos_file p) fileD then Some (mkPiece c Shah)
+      else if file_eq_dec (pos_file p) fileE then Some (mkPiece c Ferz)
+      else if file_eq_dec (pos_file p) fileF then Some (mkPiece c Alfil)
+      else if file_eq_dec (pos_file p) fileG then Some (mkPiece c Faras)
+      else if file_eq_dec (pos_file p) fileH then Some (mkPiece c Rukh)
+      else None
+    else None.
+
+Definition initial_baidaq_setup (c: Color) : Position -> option Piece :=
+  fun p =>
+    let r := if Color_beq c White then rank2 else rank7 in
+    if rank_eq_dec (pos_rank p) r then
+      Some (mkPiece c Baidaq)
+    else None.
+
+Definition standard_initial_board : Board :=
+  fun p =>
+    match initial_rank_setup White p with
+    | Some pc => Some pc
+    | None => match initial_rank_setup Black p with
+              | Some pc => Some pc
+              | None => match initial_baidaq_setup White p with
+                        | Some pc => Some pc
+                        | None => initial_baidaq_setup Black p
+                        end
+              end
+    end.
+
+(** * Alternative Initial Position *)
+
+Definition alternative_rank_setup (c: Color) : Position -> option Piece :=
+  fun p =>
+    let r := if Color_beq c White then rank1 else rank8 in
+    if rank_eq_dec (pos_rank p) r then
+      if file_eq_dec (pos_file p) fileA then Some (mkPiece c Rukh)
+      else if file_eq_dec (pos_file p) fileB then Some (mkPiece c Faras)
+      else if file_eq_dec (pos_file p) fileC then Some (mkPiece c Alfil)
+      else if file_eq_dec (pos_file p) fileD then Some (mkPiece c Ferz)
+      else if file_eq_dec (pos_file p) fileE then Some (mkPiece c Shah)
+      else if file_eq_dec (pos_file p) fileF then Some (mkPiece c Alfil)
+      else if file_eq_dec (pos_file p) fileG then Some (mkPiece c Faras)
+      else if file_eq_dec (pos_file p) fileH then Some (mkPiece c Rukh)
+      else None
+    else None.
+
+Definition alternative_initial_board : Board :=
+  fun p =>
+    match alternative_rank_setup White p with
+    | Some pc => Some pc
+    | None => match alternative_rank_setup Black p with
+              | Some pc => Some pc
+              | None => match initial_baidaq_setup White p with
+                        | Some pc => Some pc
+                        | None => initial_baidaq_setup Black p
+                        end
+              end
+    end.
+
+(** * Historical Tabiyat *)
+
+Definition tabiya_muwashshah : Board :=
+  fun p =>
+    if position_eq_dec p (mkPosition rank1 fileA) then Some white_rukh
+    else if position_eq_dec p (mkPosition rank1 fileH) then Some white_rukh
+    else if position_eq_dec p (mkPosition rank1 fileD) then Some white_shah
+    else if position_eq_dec p (mkPosition rank1 fileE) then Some white_ferz
+    else if position_eq_dec p (mkPosition rank3 fileC) then Some white_faras
+    else if position_eq_dec p (mkPosition rank3 fileF) then Some white_faras
+    else if position_eq_dec p (mkPosition rank3 fileB) then Some white_alfil
+    else if position_eq_dec p (mkPosition rank3 fileG) then Some white_alfil
+    else if position_eq_dec p (mkPosition rank4 fileD) then Some white_baidaq
+    else if position_eq_dec p (mkPosition rank4 fileE) then Some white_baidaq
+    else if position_eq_dec p (mkPosition rank2 fileA) then Some white_baidaq
+    else if position_eq_dec p (mkPosition rank2 fileH) then Some white_baidaq
+    else if position_eq_dec p (mkPosition rank8 fileA) then Some black_rukh
+    else if position_eq_dec p (mkPosition rank8 fileH) then Some black_rukh
+    else if position_eq_dec p (mkPosition rank8 fileD) then Some black_shah
+    else if position_eq_dec p (mkPosition rank8 fileE) then Some black_ferz
+    else if position_eq_dec p (mkPosition rank6 fileC) then Some black_faras
+    else if position_eq_dec p (mkPosition rank6 fileF) then Some black_faras
+    else if position_eq_dec p (mkPosition rank6 fileB) then Some black_alfil
+    else if position_eq_dec p (mkPosition rank6 fileG) then Some black_alfil
+    else if position_eq_dec p (mkPosition rank5 fileD) then Some black_baidaq
+    else if position_eq_dec p (mkPosition rank5 fileE) then Some black_baidaq
+    else if position_eq_dec p (mkPosition rank7 fileA) then Some black_baidaq
+    else if position_eq_dec p (mkPosition rank7 fileH) then Some black_baidaq
+    else None.
+
+Definition tabiya_sayf : Board :=
+  fun p =>
+    if position_eq_dec p (mkPosition rank1 fileD) then Some white_shah
+    else if position_eq_dec p (mkPosition rank1 fileE) then Some white_ferz
+    else if position_eq_dec p (mkPosition rank1 fileA) then Some white_rukh
+    else if position_eq_dec p (mkPosition rank1 fileH) then Some white_rukh
+    else if position_eq_dec p (mkPosition rank3 fileE) then Some white_faras
+    else if position_eq_dec p (mkPosition rank3 fileF) then Some white_alfil
+    else if position_eq_dec p (mkPosition rank4 fileD) then Some white_baidaq
+    else if position_eq_dec p (mkPosition rank4 fileE) then Some white_baidaq
+    else if position_eq_dec p (mkPosition rank4 fileF) then Some white_baidaq
+    else if position_eq_dec p (mkPosition rank8 fileD) then Some black_shah
+    else if position_eq_dec p (mkPosition rank8 fileE) then Some black_ferz
+    else if position_eq_dec p (mkPosition rank8 fileA) then Some black_rukh
+    else if position_eq_dec p (mkPosition rank8 fileH) then Some black_rukh
+    else if position_eq_dec p (mkPosition rank6 fileD) then Some black_faras
+    else if position_eq_dec p (mkPosition rank6 fileC) then Some black_alfil
+    else if position_eq_dec p (mkPosition rank5 fileD) then Some black_baidaq
+    else if position_eq_dec p (mkPosition rank5 fileE) then Some black_baidaq
+    else if position_eq_dec p (mkPosition rank5 fileC) then Some black_baidaq
+    else None.
+
+Definition tabiya_position (n: nat) : option Board :=
+  match n with
+  | 1 => Some tabiya_muwashshah
+  | 2 => Some tabiya_sayf
+  | _ => None
+  end.
+
+(** * Board Query Functions *)
+
+Definition find_shah (b: Board) (c: Color) : option Position :=
+  find (fun p => match b[p] with
+                 | Some pc => andb (is_shah pc) (Color_beq (piece_color pc) c)
+                 | None => false
+                 end) enum_position.
+
+Definition count_pieces (b: Board) (c: Color) : nat :=
+  List.length (filter (fun p => occupied_by b p c) enum_position).
+
+Definition count_piece_type_on_board (b: Board) (c: Color) (pt: PieceType) : nat :=
+  List.length (filter (fun p => 
+    match b[p] with
+    | Some pc => andb (Color_beq (piece_color pc) c) 
+                     (PieceType_beq (piece_type pc) pt)
+    | None => false
+    end) enum_position).
+
+Definition get_all_pieces (b: Board) (c: Color) : list (Position * Piece) :=
+  fold_left (fun acc p =>
+    match b[p] with
+    | Some pc => if Color_beq (piece_color pc) c 
+                 then (p, pc) :: acc 
+                 else acc
+    | None => acc
+    end) enum_position nil.
+
+(** * Board Path Checking *)
+
+Fixpoint path_clear_n (b: Board) (from: Position) (dr df: Z) (n: nat) : bool :=
+  match n with
+  | O => true
+  | S n' =>
+      match offset from dr df with
+      | Some next => if empty b next then path_clear_n b next dr df n' else false
+      | None => false
+      end
+  end.
+
+Definition path_clear (b: Board) (from to: Position) (dr df: Z) : bool :=
+  path_clear_n b from dr df 7.
+
+(** * Board Manipulation *)
+
+Definition promote_baidaq (b: Board) (p: Position) (c: Color) : Board :=
+  board_place b p (mkPiece c Ferz).
+
+Definition clear_rank (b: Board) (r: Rank) : Board :=
+  fold_left (fun b' f => board_remove b' (mkPosition r f)) enum_file b.
+
+Definition clear_file (b: Board) (f: File) : Board :=
+  fold_left (fun b' r => board_remove b' (mkPosition r f)) enum_rank b.
+
+(** * Board Validation *)
+
+Definition has_shah (b: Board) (c: Color) : bool :=
+  match find_shah b c with
+  | Some _ => true
+  | None => false
+  end.
+
+Definition shah_count (b: Board) (c: Color) : nat :=
+  count_piece_type_on_board b c Shah.
+
+Definition valid_shah_count (b: Board) : bool :=
+  andb (Nat.eqb (shah_count b White) 1)
+       (Nat.eqb (shah_count b Black) 1).
+
+Definition valid_piece_counts (b: Board) : bool :=
+  andb (Nat.leb (count_piece_type_on_board b White Baidaq) 8)
+       (Nat.leb (count_piece_type_on_board b Black Baidaq) 8).
+
+Definition well_formed_board (b: Board) : bool :=
+  andb (valid_shah_count b) (valid_piece_counts b).
+
+(** * Board Examples and Validation *)
+
+Example board_update_retrieve : forall b p pc,
+  board_get (board_set b p (Some pc)) p = Some pc.
+Proof.
+  intros. apply board_set_get_same.
+Qed.
+
+Lemma filter_false : forall {A: Type} (l: list A),
+  filter (fun _ => false) l = [].
+Proof.
+  intros A l. induction l; simpl; auto.
+Qed.
+
+Example empty_board_no_pieces : forall c,
+  count_pieces empty_board c = 0.
+Proof.
+  intro c. unfold count_pieces.
+  assert (H: filter (fun p => occupied_by empty_board p c) enum_position = []).
+  { assert (Heq: (fun p => occupied_by empty_board p c) = (fun _ => false)).
+    { apply fun_ext. intro p. unfold occupied_by, empty_board. reflexivity. }
+    rewrite Heq. apply filter_false. }
+  rewrite H. reflexivity.
+Qed.
+
+(** * Board Comparison *)
+
+Definition boards_differ_at (b1 b2: Board) : list Position :=
+  filter (fun p => negb (match b1[p], b2[p] with
+                         | Some p1, Some p2 => if piece_eq_dec p1 p2 then true else false
+                         | None, None => true
+                         | _, _ => false
+                         end)) enum_position.
+
+Lemma filter_nil : forall {A: Type} (P: A -> bool) (l: list A),
+  (forall x, In x l -> P x = false) -> filter P l = [].
+Proof.
+  intros A P l H. induction l; simpl; auto.
+  assert (Ha: P a = false) by (apply H; left; reflexivity).
+  rewrite Ha. apply IHl. intros x Hx. apply H. right. exact Hx.
+Qed.
+
+Lemma filter_empty_implies : forall {A: Type} (P: A -> bool) (l: list A) (x: A),
+  filter P l = [] -> In x l -> P x = false.
+Proof.
+  intros A P l. induction l; intros x Hfilter Hin.
+  - simpl in Hin. contradiction.
+  - simpl in *. destruct (P a) eqn:HPa.
+    + discriminate.
+    + destruct Hin as [<-|Hin'].
+      * exact HPa.
+      * apply IHl; assumption.
+Qed.
+
+Lemma board_eq_iff_no_diff : forall b1 b2,
+  b1 == b2 <-> boards_differ_at b1 b2 = [].
+Proof.
+  intros b1 b2. split.
+  - intros H. unfold boards_differ_at.
+    apply filter_nil. intros p _.
+    specialize (H p).
+    rewrite H.
+    destruct (b2[p]); simpl.
+    + destruct (piece_eq_dec p0 p0); [reflexivity|contradiction].
+    + reflexivity.
+  - intros H p. unfold boards_differ_at in H.
+    assert (Hin: In p enum_position) by apply enum_position_complete.
+    assert (Hp_false: negb (match b1[p], b2[p] with
+                           | Some p1, Some p2 => if piece_eq_dec p1 p2 then true else false
+                           | None, None => true
+                           | _, _ => false
+                           end) = false).
+    { apply (filter_empty_implies _ enum_position p H Hin). }
+    simpl in Hp_false.
+    destruct (b1[p]) eqn:E1, (b2[p]) eqn:E2.
+    + simpl in Hp_false.
+      destruct (piece_eq_dec p0 p1).
+      * subst. reflexivity.
+      * simpl in Hp_false. discriminate.
+    + simpl in Hp_false. discriminate.
+    + simpl in Hp_false. discriminate.
+    + reflexivity.
+Qed.
+
+(** * End of Section 5: Board Abstraction *)
