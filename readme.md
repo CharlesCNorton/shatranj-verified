@@ -1,6 +1,6 @@
 # Shatranj in Coq
 
-Machine-checked formalization of Shatranj (medieval chess) following FIDE Laws of Shatranj.
+Machine-checked formalization of Shatranj (medieval chess) following derived Laws of Shatranj.
 
 ## Scope
 
