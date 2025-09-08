@@ -1,4 +1,4 @@
-# FIDE Laws of Shatranj
+# Laws of Shatranj
 
 **Effective Date: September 7, 2025**
 
