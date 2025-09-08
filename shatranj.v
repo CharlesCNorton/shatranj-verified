@@ -50,7 +50,7 @@ Ltac solve_bool :=
   | [ H: false = true |- _ ] => discriminate H
   end.
 
-Ltac solve_decidable :=
+Ltac solve_decidability :=
   repeat match goal with
   | [ |- {?x = ?y} + {?x <> ?y} ] => decide equality
   | [ |- decidable _ ] => unfold decidable; tauto
@@ -140,6 +140,7 @@ Qed.
 
 (** * Helper for Program Definitions *)
 
+#[global]
 Obligation Tactic := program_simpl; auto; try lia.
 
 (** * List Utilities *)
@@ -436,7 +437,7 @@ Proof.
   destruct (Fin.to_nat f) as [n Hn]. simpl. exact Hn.
 Qed.
 
-Fixpoint nat_to_fin8_aux (n: nat) : Fin8 :=
+Definition nat_to_fin8_aux (n: nat) : Fin8 :=
   match n with
   | 0 => Fin.F1
   | 1 => Fin.FS Fin.F1
@@ -4033,4 +4034,3 @@ Definition apply_move_with_promotion (b: Board) (from to: Position) : Board :=
 (** * End of Section 7: Piece Movement Rules *)
 
 Close Scope Z_scope.
-        
