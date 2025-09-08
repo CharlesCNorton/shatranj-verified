@@ -1602,3 +1602,422 @@ Qed.
 (** * End of Section 3: Position Abstraction *)
 
 Close Scope Z_scope.
+
+(* ========================================================================= *)
+(* SECTION 4: CORE GAME ONTOLOGY                                            *)
+(* ========================================================================= *)
+
+(** * Color Definition *)
+
+Inductive Color : Type :=
+  | White : Color
+  | Black : Color.
+
+(** * Decidable Equality for Color *)
+
+Lemma color_eq_dec : forall (c1 c2: Color), {c1 = c2} + {c1 <> c2}.
+Proof.
+  decide equality.
+Defined.
+
+#[global]
+Instance color_decidable_eq : DecidableEq Color := {
+  dec_eq := color_eq_dec
+}.
+
+(** * Opposite Color *)
+
+Definition opposite_color (c: Color) : Color :=
+  match c with
+  | White => Black
+  | Black => White
+  end.
+
+(** * Opposite Color Properties *)
+
+Lemma opposite_color_involutive : forall c,
+  opposite_color (opposite_color c) = c.
+Proof.
+  intros []; reflexivity.
+Qed.
+
+Lemma opposite_color_injective : forall c1 c2,
+  opposite_color c1 = opposite_color c2 -> c1 = c2.
+Proof.
+  intros [] []; simpl; intro H; [reflexivity|discriminate|discriminate|reflexivity].
+Qed.
+
+Lemma opposite_color_neq : forall c,
+  opposite_color c <> c.
+Proof.
+  intros []; discriminate.
+Qed.
+
+(** * Piece Types for Shatranj *)
+
+Inductive PieceType : Type :=
+  | Shah   : PieceType  (* King *)
+  | Ferz   : PieceType  (* Counselor - moves 1 square diagonally *)
+  | Alfil  : PieceType  (* Elephant - leaps exactly 2 squares diagonally *)
+  | Faras  : PieceType  (* Knight - same as chess knight *)
+  | Rukh   : PieceType  (* Rook - same as chess rook *)
+  | Baidaq : PieceType. (* Pawn - moves 1 forward, captures diagonally *)
+
+(** * Decidable Equality for PieceType *)
+
+Lemma piece_type_eq_dec : forall (pt1 pt2: PieceType), {pt1 = pt2} + {pt1 <> pt2}.
+Proof.
+  decide equality.
+Defined.
+
+#[global]
+Instance piece_type_decidable_eq : DecidableEq PieceType := {
+  dec_eq := piece_type_eq_dec
+}.
+
+(** * Piece Definition *)
+
+Record Piece : Type := mkPiece {
+  piece_color : Color;
+  piece_type : PieceType
+}.
+
+(** * Decidable Equality for Piece *)
+
+Lemma piece_eq_dec : forall (p1 p2: Piece), {p1 = p2} + {p1 <> p2}.
+Proof.
+  intros [c1 pt1] [c2 pt2].
+  destruct (color_eq_dec c1 c2), (piece_type_eq_dec pt1 pt2).
+  - left. f_equal; assumption.
+  - right. intro H. injection H. intros. contradiction.
+  - right. intro H. injection H. intros. contradiction.
+  - right. intro H. injection H. intros. contradiction.
+Defined.
+
+#[global]
+Instance piece_decidable_eq : DecidableEq Piece := {
+  dec_eq := piece_eq_dec
+}.
+
+(** * Piece Construction Helpers *)
+
+Definition white_shah   := mkPiece White Shah.
+Definition white_ferz   := mkPiece White Ferz.
+Definition white_alfil  := mkPiece White Alfil.
+Definition white_faras  := mkPiece White Faras.
+Definition white_rukh   := mkPiece White Rukh.
+Definition white_baidaq := mkPiece White Baidaq.
+
+Definition black_shah   := mkPiece Black Shah.
+Definition black_ferz   := mkPiece Black Ferz.
+Definition black_alfil  := mkPiece Black Alfil.
+Definition black_faras  := mkPiece Black Faras.
+Definition black_rukh   := mkPiece Black Rukh.
+Definition black_baidaq := mkPiece Black Baidaq.
+
+(** * Piece Properties *)
+
+Definition is_shah (p: Piece) : bool :=
+  match piece_type p with
+  | Shah => true
+  | _ => false
+  end.
+
+Definition is_ferz (p: Piece) : bool :=
+  match piece_type p with
+  | Ferz => true
+  | _ => false
+  end.
+
+Definition is_alfil (p: Piece) : bool :=
+  match piece_type p with
+  | Alfil => true
+  | _ => false
+  end.
+
+Definition is_faras (p: Piece) : bool :=
+  match piece_type p with
+  | Faras => true
+  | _ => false
+  end.
+
+Definition is_rukh (p: Piece) : bool :=
+  match piece_type p with
+  | Rukh => true
+  | _ => false
+  end.
+
+Definition is_baidaq (p: Piece) : bool :=
+  match piece_type p with
+  | Baidaq => true
+  | _ => false
+  end.
+
+Definition is_white (p: Piece) : bool :=
+  match piece_color p with
+  | White => true
+  | Black => false
+  end.
+
+Definition is_black (p: Piece) : bool :=
+  match piece_color p with
+  | Black => true
+  | White => false
+  end.
+
+Definition Color_beq (c1 c2: Color) : bool :=
+  match c1, c2 with
+  | White, White => true
+  | Black, Black => true
+  | _, _ => false
+  end.
+
+Definition same_color (p1 p2: Piece) : bool :=
+  Color_beq (piece_color p1) (piece_color p2).
+
+Definition opposite_colors (p1 p2: Piece) : bool :=
+  negb (same_color p1 p2).
+
+(** * Exhaustiveness Lemmas *)
+
+Lemma color_exhaustive : forall c (P: Color -> Prop),
+  P White -> P Black -> P c.
+Proof.
+  intros [] P HW HB; assumption.
+Qed.
+
+Lemma piece_type_exhaustive : forall pt (P: PieceType -> Prop),
+  P Shah -> P Ferz -> P Alfil -> P Faras -> P Rukh -> P Baidaq -> P pt.
+Proof.
+  intros [] P HS HF HA HN HR HB; assumption.
+Qed.
+
+Lemma piece_exhaustive : forall p (P: Piece -> Prop),
+  (forall c pt, P (mkPiece c pt)) -> P p.
+Proof.
+  intros [c pt] P H. apply H.
+Qed.
+
+(** * Finite Instances *)
+
+#[global]
+Instance color_finite : Finite Color := {
+  enum := [White; Black];
+  enum_complete := fun c => match c with
+    | White => or_introl eq_refl
+    | Black => or_intror (or_introl eq_refl)
+    end;
+  enum_nodup := ltac:(repeat constructor; simpl; intuition discriminate)
+}.
+
+#[global]
+Instance piece_type_finite : Finite PieceType := {
+  enum := [Shah; Ferz; Alfil; Faras; Rukh; Baidaq];
+  enum_complete := fun pt => match pt with
+    | Shah => or_introl eq_refl
+    | Ferz => or_intror (or_introl eq_refl)
+    | Alfil => or_intror (or_intror (or_introl eq_refl))
+    | Faras => or_intror (or_intror (or_intror (or_introl eq_refl)))
+    | Rukh => or_intror (or_intror (or_intror (or_intror (or_introl eq_refl))))
+    | Baidaq => or_intror (or_intror (or_intror (or_intror (or_intror (or_introl eq_refl)))))
+    end;
+  enum_nodup := ltac:(repeat constructor; simpl; intuition discriminate)
+}.
+
+#[global]
+Instance piece_finite : Finite Piece.
+Proof.
+  refine {| enum := map (fun cp => mkPiece (fst cp) (snd cp)) 
+                       (list_prod (@enum Color _) (@enum PieceType _)) |}.
+  - intro p. destruct p as [c pt].
+    apply in_map_iff. exists (c, pt). split.
+    + reflexivity.
+    + apply in_prod; apply enum_complete.
+  - apply NoDup_map.
+    + intros [c1 pt1] [c2 pt2] _ _ H. simpl in H.
+      injection H. intros. f_equal; assumption.
+    + apply NoDup_list_prod; apply enum_nodup.
+Defined.
+
+(** * Piece Movement Classification *)
+
+Definition is_sliding_piece (pt: PieceType) : bool :=
+  match pt with
+  | Rukh => true  (* Rukh slides along ranks/files *)
+  | _ => false
+  end.
+
+Definition is_leaping_piece (pt: PieceType) : bool :=
+  match pt with
+  | Alfil => true  (* Alfil leaps exactly 2 diagonally *)
+  | Faras => true  (* Faras (knight) leaps in L-shape *)
+  | _ => false
+  end.
+
+Definition is_step_piece (pt: PieceType) : bool :=
+  match pt with
+  | Shah => true   (* Shah moves 1 square any direction *)
+  | Ferz => true   (* Ferz moves 1 square diagonally *)
+  | Baidaq => true (* Baidaq moves 1 square forward *)
+  | _ => false
+  end.
+
+Lemma piece_movement_complete : forall pt,
+  is_sliding_piece pt = true \/ 
+  is_leaping_piece pt = true \/ 
+  is_step_piece pt = true.
+Proof.
+  intros []; simpl; auto.
+Qed.
+
+Lemma piece_movement_exclusive : forall pt,
+  (is_sliding_piece pt = true -> is_leaping_piece pt = false /\ is_step_piece pt = false) /\
+  (is_leaping_piece pt = true -> is_sliding_piece pt = false /\ is_step_piece pt = false) /\
+  (is_step_piece pt = true -> is_sliding_piece pt = false /\ is_leaping_piece pt = false).
+Proof.
+  intros []; simpl; repeat split; discriminate.
+Qed.
+
+(** * Piece Value for Material Calculation *)
+
+Open Scope Z_scope.
+
+Definition piece_value (pt: PieceType) : Z :=
+  match pt with
+  | Shah => 1000  (* Infinite value, but we use large number *)
+  | Rukh => 5
+  | Faras => 3
+  | Alfil => 2
+  | Ferz => 2
+  | Baidaq => 1
+  end.
+
+Lemma piece_value_positive : forall pt,
+  piece_value pt > 0.
+Proof.
+  intros []; simpl; lia.
+Qed.
+
+Close Scope Z_scope.
+
+(** * Piece Notation *)
+
+Definition piece_type_to_char (pt: PieceType) : string :=
+  match pt with
+  | Shah => "K"
+  | Ferz => "F"
+  | Alfil => "A"
+  | Faras => "N"
+  | Rukh => "R"
+  | Baidaq => ""  (* Pawns have no letter *)
+  end.
+
+Definition piece_to_char (p: Piece) : string :=
+  let pt_char := piece_type_to_char (piece_type p) in
+  match piece_color p with
+  | White => pt_char
+  | Black => 
+      match piece_type p with
+      | Shah => "k"
+      | Ferz => "f"
+      | Alfil => "a"
+      | Faras => "n"
+      | Rukh => "r"
+      | Baidaq => "p"
+      end
+  end.
+
+(** * FEN Character Support *)
+
+Definition char_to_piece (c: string) : option Piece :=
+  match c with
+  | "K" => Some white_shah
+  | "F" => Some white_ferz
+  | "A" => Some white_alfil
+  | "N" => Some white_faras
+  | "R" => Some white_rukh
+  | "P" => Some white_baidaq
+  | "k" => Some black_shah
+  | "f" => Some black_ferz
+  | "a" => Some black_alfil
+  | "n" => Some black_faras
+  | "r" => Some black_rukh
+  | "p" => Some black_baidaq
+  | _ => None
+  end.
+
+(** * Special Piece Properties for Shatranj *)
+
+(** Alfil can only reach 1/8 of the board from any position *)
+Definition alfil_reachable_squares : nat := 8.
+
+(** Ferz is much weaker than modern Queen - only 4 possible moves *)
+Definition ferz_max_moves : nat := 4.
+
+(** Baidaq promotes only to Ferz *)
+Definition baidaq_promotion_type : PieceType := Ferz.
+
+(** * Validation Examples *)
+
+Example opposite_color_involutive_validated : forall c,
+  opposite_color (opposite_color c) = c.
+Proof.
+  exact opposite_color_involutive.
+Qed.
+
+Example piece_type_cases : forall pt,
+  pt = Shah \/ pt = Ferz \/ pt = Alfil \/ 
+  pt = Faras \/ pt = Rukh \/ pt = Baidaq.
+Proof.
+  intros []; 
+  [left; reflexivity 
+  |right; left; reflexivity
+  |right; right; left; reflexivity
+  |right; right; right; left; reflexivity
+  |right; right; right; right; left; reflexivity
+  |right; right; right; right; right; reflexivity].
+Qed.
+
+Example white_pieces_different_from_black : forall pt,
+  mkPiece White pt <> mkPiece Black pt.
+Proof.
+  intros pt H. injection H. discriminate.
+Qed.
+
+(** * Piece Counting Utilities *)
+
+Definition PieceType_beq (pt1 pt2: PieceType) : bool :=
+  match pt1, pt2 with
+  | Shah, Shah => true
+  | Ferz, Ferz => true
+  | Alfil, Alfil => true
+  | Faras, Faras => true
+  | Rukh, Rukh => true
+  | Baidaq, Baidaq => true
+  | _, _ => false
+  end.
+
+Definition count_piece_type (pt: PieceType) (pieces: list Piece) : nat :=
+  List.length (filter (fun p => PieceType_beq (piece_type p) pt) pieces).
+
+Definition count_color_pieces (c: Color) (pieces: list Piece) : nat :=
+  List.length (filter (fun p => Color_beq (piece_color p) c) pieces).
+
+(** * Historical Note Validation *)
+
+(** Validates that Alfil movement is restricted compared to Bishop *)
+Lemma alfil_not_bishop : 
+  is_leaping_piece Alfil = true /\ is_sliding_piece Alfil = false.
+Proof.
+  split; reflexivity.
+Qed.
+
+(** Validates that Ferz movement is restricted compared to Queen *)
+Lemma ferz_not_queen :
+  is_step_piece Ferz = true /\ is_sliding_piece Ferz = false.
+Proof.
+  split; reflexivity.
+Qed.
+
+(** * End of Section 4: Core Game Ontology *)
+ 
