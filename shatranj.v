@@ -4055,7 +4055,59 @@ Definition apply_move_with_promotion (b: Board) (from to: Position) : Board :=
   | None => b
   end.
 
+(** * Check Detection for Shah Movement *)
+
+(** Check if a position would be attacked by any enemy piece *)
+Definition position_attacked_by (b: Board) (pos: Position) (by_color: Color) : bool :=
+  existsb (fun from =>
+    match b[from] with
+    | Some pc => 
+        andb (Color_beq (piece_color pc) by_color)
+             (threatens b from pos)
+    | None => false
+    end
+  ) enum_position.
+
+(** Check if moving the Shah would leave it in check *)
+Definition shah_move_would_be_in_check (b: Board) (c: Color) (from to: Position) : bool :=
+  let b_after_move := board_move b from to in
+  position_attacked_by b_after_move to (opposite_color c).
+
+(** Enhanced Shah movement with check constraint *)
+Definition shah_move_safe_spec (b: Board) (c: Color) (from to: Position) : Prop :=
+  shah_move_spec b c from to /\
+  shah_move_would_be_in_check b c from to = false.
+
+Definition shah_move_safe_impl (b: Board) (c: Color) (from to: Position) : bool :=
+  shah_move_impl b c from to &&
+  negb (shah_move_would_be_in_check b c from to).
+
+(** Soundness of safe Shah movement *)
+Lemma shah_move_safe_sound : forall b c from to,
+  shah_move_safe_impl b c from to = true ->
+  shah_move_safe_spec b c from to.
+Proof.
+  intros b c from to H.
+  unfold shah_move_safe_impl in H.
+  apply andb_prop in H. destruct H as [Hmove Hsafe].
+  unfold shah_move_safe_spec.
+  split.
+  - apply shah_move_sound. exact Hmove.
+  - apply negb_true_iff in Hsafe. exact Hsafe.
+Qed.
+
+(** Completeness of safe Shah movement *)
+Lemma shah_move_safe_complete : forall b c from to,
+  shah_move_safe_spec b c from to ->
+  shah_move_safe_impl b c from to = true.
+Proof.
+  intros b c from to [Hspec Hsafe].
+  unfold shah_move_safe_impl.
+  apply andb_true_intro. split.
+  - apply shah_move_complete. exact Hspec.
+  - apply negb_true_iff. exact Hsafe.
+Qed.
+
 (** * End of Section 7: Piece Movement Rules *)
 
 Close Scope Z_scope.
-        
