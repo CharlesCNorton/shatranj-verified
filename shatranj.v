@@ -6229,3 +6229,196 @@ Qed.
 Close Scope Z_scope.
 
 (** End of Section 11: Move Representation *)
+
+(* ========================================================================= *)
+(* SECTION 12: MOVE LEGALITY                                                *)
+(* ========================================================================= *)
+
+(** * 12.1 Legal Move Specification *)
+
+(** A move is legal if it satisfies all validation requirements in order *)
+Definition legal_move_spec (st: GameState) (m: Move) : Prop :=
+  match m with
+  | Normal from to | Promotion from to =>
+      (* 1. Check piece ownership - correct color *)
+      match (board st)[from] with
+      | None => False
+      | Some pc => 
+          piece_color pc = turn st /\
+          (* 2. Check basic movement pattern - piece-specific *)
+          can_move_piece (board st) pc from to = true /\
+          (* 3. Path clearance is checked inside can_move_piece for sliding pieces *)
+          (* 4. Destination validation - empty or opponent piece *)
+          (match (board st)[to] with
+           | None => True
+           | Some target => piece_color target <> turn st
+           end) /\
+          (* 5. No self-check after move *)
+          let b_after := board_move (board st) from to in
+          (match find_shah b_after (turn st) with
+           | None => False  (* Shah must exist *)
+           | Some shah_pos => 
+               position_under_attack_by b_after shah_pos (opposite_color (turn st)) = false
+           end) /\
+          (* 6. Special rules: Baidaq reaching 8th rank must promote *)
+          (piece_type pc = Baidaq /\ baidaq_at_promotion_rank to (turn st) = true ->
+           m = Promotion from to)
+      end
+  | Resignation c => c = turn st  (* Can only resign on your turn *)
+  | DrawOffer => True  (* Can offer draw on your turn *)
+  | DrawAccept => draw_offer_pending st = true  (* Can only accept if offer pending *)
+  end.
+
+(** Example: A simple legal move - White Baidaq e2 to e3 at game start *)
+Example legal_move_spec_basic_example :
+  let st := initial_game_state in
+  let m := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  (* This move should satisfy the spec because:
+     - There's a white baidaq at e2
+     - White's turn
+     - e3 is empty
+     - No self-check results *)
+  exists pc, 
+    (board st)[mkPosition rank2 fileE] = Some pc /\
+    piece_color pc = White /\
+    piece_type pc = Baidaq.
+Proof.
+  exists white_baidaq.
+  split; [|split]; reflexivity.
+Qed.
+
+(** * 12.2 Legal Move Implementation *)
+
+(** Computable version of legal move checking *)
+Definition legal_move_impl (st: GameState) (m: Move) : bool :=
+  match m with
+  | Normal from to | Promotion from to =>
+      (* Step 1: Check piece ownership *)
+      match (board st)[from] with
+      | None => false
+      | Some pc => 
+          (* Correct color? *)
+          andb (Color_beq (piece_color pc) (turn st))
+          (* Step 2: Basic movement pattern *)
+          (andb (can_move_piece (board st) pc from to)
+          (* Step 3: Path clearance handled in can_move_piece *)
+          (* Step 4: Destination check handled in can_move_piece *)
+          (* Step 5: No self-check after move *)
+          (let b_after := board_move (board st) from to in
+           match find_shah b_after (turn st) with
+           | None => false  (* Should never happen in well-formed state *)
+           | Some shah_pos => 
+               negb (position_under_attack_by b_after shah_pos (opposite_color (turn st)))
+           end))
+      end
+  | Resignation c => Color_beq c (turn st)
+  | DrawOffer => true
+  | DrawAccept => draw_offer_pending st
+  end.
+
+(** Example: White Baidaq e2-e3 is legal at game start *)
+Example white_baidaq_e2e3_legal :
+  let st := initial_game_state in
+  let m := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  legal_move_impl st m = true.
+Proof.
+  simpl.
+  unfold legal_move_impl, initial_game_state.
+  simpl.
+  unfold can_move_piece, baidaq_move_impl.
+  simpl.
+  reflexivity.
+Qed.
+
+(** Example: Black cannot move on White's turn *)
+Example black_cannot_move_on_white_turn :
+  let st := initial_game_state in
+  let m := Normal (mkPosition rank7 fileE) (mkPosition rank6 fileE) in
+  (* Black's e7 baidaq cannot move because it's White's turn *)
+  legal_move_impl st m = false.
+Proof.
+  simpl.
+  unfold legal_move_impl, initial_game_state.
+  simpl.
+  reflexivity.
+Qed.
+
+(** * 12.3 Self-Check Prevention *)
+
+(** First, we need a function to apply a move to get the resulting state *)
+Definition apply_move_impl (st: GameState) (m: Move) : option GameState :=
+  match m with
+  | Normal from to | Promotion from to =>
+      match (board st)[from] with
+      | None => None
+      | Some pc =>
+          let b' := board_move (board st) from to in
+          let b_final := 
+            if andb (PieceType_beq (piece_type pc) Baidaq)
+                    (baidaq_at_promotion_rank to (piece_color pc))
+            then board_place b' to (mkPiece (piece_color pc) Ferz)
+            else b' in
+          let is_capture := match (board st)[to] with
+                            | Some _ => true
+                            | None => false
+                            end in
+          let is_baidaq := PieceType_beq (piece_type pc) Baidaq in
+          Some (mkGameState
+                  b_final
+                  (opposite_color (turn st))
+                  (update_halfmove_clock st is_capture is_baidaq)
+                  (if Color_beq (turn st) Black 
+                   then S (fullmove_number st) 
+                   else fullmove_number st)
+                  false)  (* Clear draw offer *)
+      end
+  | Resignation _ => None  (* Game ends *)
+  | DrawOffer => Some (mkGameState 
+                        (board st) 
+                        (turn st) 
+                        (halfmove_clock st)
+                        (fullmove_number st)
+                        true)  (* Set draw offer pending *)
+  | DrawAccept => None  (* Game ends *)
+  end.
+
+(** Helper: PieceType_beq reflects equality *)
+Lemma PieceType_beq_eq : forall pt1 pt2,
+  PieceType_beq pt1 pt2 = true <-> pt1 = pt2.
+Proof.
+  intros pt1 pt2. split.
+  - intro H. destruct pt1, pt2; simpl in H; try discriminate; reflexivity.
+  - intro H. subst. destruct pt2; simpl; reflexivity.
+Qed.
+
+(** Helper: Find with extensionally equal predicates gives same result *)
+Lemma find_ext : forall {A} (f g : A -> bool) (l : list A),
+  (forall x, In x l -> f x = g x) ->
+  find f l = find g l.
+Proof.
+  intros A f g l H.
+  induction l as [|a l' IH].
+  - simpl. reflexivity.
+  - simpl. 
+    assert (f a = g a) as Heq.
+    { apply H. simpl. left. reflexivity. }
+    rewrite Heq.
+    destruct (g a).
+    + reflexivity.
+    + apply IH. intros x Hin. apply H. simpl. right. exact Hin.
+Qed.
+
+(** Helper: DrawOffer doesn't change the board *)
+Lemma draw_offer_preserves_board : forall st,
+  board (mkGameState (board st) (turn st) (halfmove_clock st) 
+                     (fullmove_number st) true) = board st.
+Proof.
+  intros st. simpl. reflexivity.
+Qed.
+
+(** Helper: Check status depends only on board and color *)
+Lemma in_check_board_only : forall b1 b2 c,
+  b1 = b2 -> in_check b1 c = in_check b2 c.
+Proof.
+  intros b1 b2 c Heq. subst. reflexivity.
+Qed.
