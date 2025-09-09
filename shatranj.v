@@ -3051,7 +3051,9 @@ Definition can_attack_position (b: Board) (from to: Position) : bool :=
       | Ferz => validate_step_move from to ferz_vectors
       | Alfil => validate_leap_move from to alfil_vectors
       | Faras => validate_leap_move from to faras_vectors
-      | Rukh => validate_slide_move from to rukh_directions
+      | Rukh => 
+          andb (validate_slide_move from to rukh_directions)
+               (path_clear_between b from to)
       | Baidaq => 
           let c := piece_color pc in
           existsb (fun dir =>
@@ -3062,19 +3064,31 @@ Definition can_attack_position (b: Board) (from to: Position) : bool :=
       end
   end.
 
+Fixpoint find_attacking_pieces (b: Board) (target: Position) (by_color: Color) 
+                               (remaining: list Position) : list Position :=
+  match remaining with
+  | [] => []
+  | pos :: rest =>
+      match b[pos] with
+      | None => find_attacking_pieces b target by_color rest
+      | Some pc =>
+          if andb (Color_beq (piece_color pc) by_color)
+                  (can_attack_position b pos target)
+          then pos :: find_attacking_pieces b target by_color rest
+          else find_attacking_pieces b target by_color rest
+      end
+  end.
+
 Definition position_under_attack_by (b: Board) (pos: Position) (by_color: Color) : bool :=
-  existsb (fun from =>
-    match b[from] with
-    | Some pc => 
-        andb (Color_beq (piece_color pc) by_color)
-             (can_attack_position b from pos)
-    | None => false
-    end
-  ) enum_position.
+  match find_attacking_pieces b pos by_color enum_position with
+  | [] => false
+  | _ => true
+  end.
 
 Definition shah_move_would_leave_in_check (b: Board) (c: Color) (from to: Position) : bool :=
   let b_after_move := board_move b from to in
   position_under_attack_by b_after_move to (opposite_color c).
+
 
 (** * SHAH (King) Movement *)
 
@@ -4254,14 +4268,10 @@ Definition apply_move_with_promotion (b: Board) (from to: Position) : Board :=
 
 (** Check if a position would be attacked by any enemy piece *)
 Definition position_attacked_by (b: Board) (pos: Position) (by_color: Color) : bool :=
-  existsb (fun from =>
-    match b[from] with
-    | Some pc => 
-        andb (Color_beq (piece_color pc) by_color)
-             (threatens b from pos)
-    | None => false
-    end
-  ) enum_position.
+  match find_attacking_pieces b pos by_color enum_position with
+  | [] => false
+  | _ => true
+  end.
 
 (** Check if moving the Shah would leave it in check *)
 Definition shah_move_would_be_in_check (b: Board) (c: Color) (from to: Position) : bool :=
