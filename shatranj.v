@@ -4916,6 +4916,154 @@ Proof.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
 Qed.
 
+(** * Completeness Lemmas for Attacks *)
+
+(** Completeness for Shah attacks *)
+Lemma attacks_shah_complete : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Shah /\ shah_move_spec b (piece_color pc) from to
+  | None => False
+  end ->
+  attacks b from to = true.
+Proof.
+  intros b from to H.
+  unfold attacks.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct H as [Htype Hspec].
+  rewrite Htype.
+  apply shah_move_complete. exact Hspec.
+Qed.
+
+(** Completeness for Ferz attacks *)
+Lemma attacks_ferz_complete : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Ferz /\ ferz_move_spec b (piece_color pc) from to
+  | None => False
+  end ->
+  attacks b from to = true.
+Proof.
+  intros b from to H.
+  unfold attacks.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct H as [Htype Hspec].
+  rewrite Htype.
+  apply ferz_move_complete. exact Hspec.
+Qed.
+
+(** Completeness for Alfil attacks *)
+Lemma attacks_alfil_complete : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Alfil /\ alfil_move_spec b (piece_color pc) from to
+  | None => False
+  end ->
+  attacks b from to = true.
+Proof.
+  intros b from to H.
+  unfold attacks.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct H as [Htype Hspec].
+  rewrite Htype.
+  apply alfil_move_complete. exact Hspec.
+Qed.
+
+(** Completeness for Faras attacks *)
+Lemma attacks_faras_complete : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Faras /\ faras_move_spec b (piece_color pc) from to
+  | None => False
+  end ->
+  attacks b from to = true.
+Proof.
+  intros b from to H.
+  unfold attacks.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct H as [Htype Hspec].
+  rewrite Htype.
+  apply faras_move_complete. exact Hspec.
+Qed.
+
+(** Completeness for Baidaq attacks *)
+Lemma attacks_baidaq_complete : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Baidaq /\ 
+               exists dr df, In (dr, df) (baidaq_capture_vectors (piece_color pc)) /\
+                            offset from dr df = Some to
+  | None => False
+  end ->
+  attacks b from to = true.
+Proof.
+  intros b from to H.
+  unfold attacks.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct H as [Htype [dr [df [Hin Hoff]]]].
+  rewrite Htype.
+  apply existsb_exists.
+  exists (dr, df). split.
+  - exact Hin.
+  - simpl. rewrite Hoff.
+    unfold position_beq.
+    destruct (position_eq_dec to to); [reflexivity|contradiction].
+Qed.
+
+(** Helper lemma: rukh_find_path_distance succeeds for unit vectors *)
+Lemma rukh_find_path_unit_step : forall b from dr df to,
+  (dr = 1 \/ dr = -1 \/ dr = 0) ->
+  (df = 1 \/ df = -1 \/ df = 0) ->
+  ~(dr = 0 /\ df = 0) ->
+  offset from dr df = Some to ->
+  rukh_find_path_distance b from dr df to 1 = Some 1%nat.
+Proof.
+  intros b from dr df to Hdr Hdf Hnonzero Hoff.
+  simpl. rewrite Hoff.
+  rewrite position_beq_refl. reflexivity.
+Qed.
+
+(** Lemma: rukh_find_path_distance finds immediate neighbors *)
+Lemma rukh_find_immediate : forall b from dr df to fuel,
+  (fuel > 0)%nat ->
+  offset from dr df = Some to ->
+  rukh_find_path_distance b from dr df to fuel = Some 1%nat.
+Proof.
+  intros b from dr df to fuel Hfuel Hoff.
+  destruct fuel.
+  - inversion Hfuel.
+  - simpl. rewrite Hoff. rewrite position_beq_refl. reflexivity.
+Qed.
+
+(** Rukh completeness for distance 1 *)
+Lemma attacks_rukh_complete_dist1 : forall b from to,
+  match b[from] with
+  | Some pc => 
+    piece_type pc = Rukh /\
+    (exists dr df,
+      In (dr, df) rukh_directions /\
+      offset from dr df = Some to /\
+      match b[to] with
+      | Some target => piece_color target <> piece_color pc
+      | None => True
+      end)
+  | None => False
+  end ->
+  attacks b from to = true.
+Proof.
+  intros b from to H.
+  unfold attacks.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct H as [Htype [dr [df [Hin [Hoff Hdest]]]]].
+  rewrite Htype.
+  unfold rukh_move_impl.
+  apply existsb_exists.
+  exists (dr, df). split.
+  - exact Hin.
+  - (* Distance 1 case *)
+    unfold rukh_max_distance. simpl.
+    rewrite Hoff. rewrite position_beq_refl.
+    unfold occupied_by.
+    destruct (b[to]) eqn:Hbto.
+    + simpl. apply negb_true_iff. apply Color_beq_neq. exact Hdest.
+    + reflexivity.
+Qed.
+
 (** Example: White Ferz can attack diagonally *)
 Example ferz_attacks_diagonal :
   let b := fun pos =>
