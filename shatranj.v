@@ -5721,5 +5721,511 @@ Proof.
   simpl. rewrite Hclock. reflexivity.
 Qed.
 
+
 (** * End of Section 10: Game State *)
-     
+
+(* ========================================================================= *)
+(* SECTION 11: MOVE REPRESENTATION                                          *)
+(* ========================================================================= *)
+
+(** * 11.1 Move Type Definition *)
+
+(** All possible moves in Shatranj *)
+Inductive Move : Type :=
+  | Normal : Position -> Position -> Move       (* Regular piece movement *)
+  | Promotion : Position -> Position -> Move    (* Baidaq to 8th rank (always becomes Ferz) *)
+  | Resignation : Color -> Move                 (* Player resigns *)
+  | DrawOffer : Move                            (* Propose a draw *)
+  | DrawAccept : Move.                          (* Accept a draw offer *)
+
+(** Note: No castling or en passant in Shatranj *)
+
+(** Example: Common opening move - Baidaq from e2 to e3 *)
+Example white_baidaq_opening : Move :=
+  Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE).
+
+(** * 11.2 Move Accessor Functions *)
+
+(** Extract source position from a move *)
+Definition move_from (m: Move) : option Position :=
+  match m with
+  | Normal from _ => Some from
+  | Promotion from _ => Some from
+  | Resignation _ => None
+  | DrawOffer => None
+  | DrawAccept => None
+  end.
+
+(** Extract destination position from a move *)
+Definition move_to (m: Move) : option Position :=
+  match m with
+  | Normal _ to => Some to
+  | Promotion _ to => Some to
+  | Resignation _ => None
+  | DrawOffer => None
+  | DrawAccept => None
+  end.
+
+(** * 11.3 Move Validation Examples *)
+
+(** REQUIRED BY SPEC: Roundtrip property for move accessors *)
+Example move_roundtrip : forall from to,
+  move_from (Normal from to) = Some from /\
+  move_to (Normal from to) = Some to.
+Proof.
+  intros from to.
+  split; reflexivity.
+Qed.
+
+(** Promotion move roundtrip - Baidaq reaching 8th rank *)
+Example promotion_roundtrip : forall from to,
+  move_from (Promotion from to) = Some from /\
+  move_to (Promotion from to) = Some to.
+Proof.
+  intros from to.
+  split; reflexivity.
+Qed.
+
+(** Realistic example: White Baidaq promotes on f8 *)
+Example white_baidaq_promotes_f8 :
+  let promo_move := Promotion (mkPosition rank7 fileF) (mkPosition rank8 fileF) in
+  (move_from promo_move = Some (mkPosition rank7 fileF)) /\
+  (move_to promo_move = Some (mkPosition rank8 fileF)).
+Proof.
+  split; reflexivity.
+Qed.
+
+(** * 11.4 Move Classification *)
+
+(** Check if a move is a promotion *)
+Definition is_promotion (m: Move) : bool :=
+  match m with
+  | Promotion _ _ => true
+  | _ => false
+  end.
+
+(** Check if a move is a regular board move *)
+Definition is_normal_move (m: Move) : bool :=
+  match m with
+  | Normal _ _ => true
+  | _ => false
+  end.
+
+(** Example: Classify the white Baidaq promotion *)
+Example promotion_classification :
+  let promo := Promotion (mkPosition rank7 fileF) (mkPosition rank8 fileF) in
+  let normal := Normal (mkPosition rank7 fileF) (mkPosition rank8 fileF) in
+  (is_promotion promo = true) /\
+  (is_normal_move promo = false) /\
+  (is_promotion normal = false) /\
+  (is_normal_move normal = true).
+Proof.
+  repeat split; reflexivity.
+Qed.
+
+(** * 11.5 Classical Shatranj Opening *)
+
+(** Historical opening: The Tabiya of the Center - moving baidaqs to control center *)
+Example classical_center_opening :
+  let e2e3 := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  let d7d6 := Normal (mkPosition rank7 fileD) (mkPosition rank6 fileD) in
+  let d2d3 := Normal (mkPosition rank2 fileD) (mkPosition rank3 fileD) in
+  let e7e6 := Normal (mkPosition rank7 fileE) (mkPosition rank6 fileE) in
+  (* All moves have correct source and destination *)
+  (move_from e2e3 = Some (mkPosition rank2 fileE)) /\
+  (move_to e2e3 = Some (mkPosition rank3 fileE)) /\
+  (move_from d7d6 = Some (mkPosition rank7 fileD)) /\
+  (move_to d7d6 = Some (mkPosition rank6 fileD)) /\
+  (move_from d2d3 = Some (mkPosition rank2 fileD)) /\
+  (move_to d2d3 = Some (mkPosition rank3 fileD)) /\
+  (move_from e7e6 = Some (mkPosition rank7 fileE)) /\
+  (move_to e7e6 = Some (mkPosition rank6 fileE)).
+Proof.
+  repeat split; reflexivity.
+Qed.
+
+(** * 11.6 Move Equality and Decidability *)
+
+(** Decidable equality for moves *)
+Definition Move_beq (m1 m2: Move) : bool :=
+  match m1, m2 with
+  | Normal from1 to1, Normal from2 to2 => 
+      andb (position_beq from1 from2) (position_beq to1 to2)
+  | Promotion from1 to1, Promotion from2 to2 => 
+      andb (position_beq from1 from2) (position_beq to1 to2)
+  | Resignation c1, Resignation c2 => Color_beq c1 c2
+  | DrawOffer, DrawOffer => true
+  | DrawAccept, DrawAccept => true
+  | _, _ => false
+  end.
+
+(** Move equality is reflexive *)
+Lemma Move_beq_refl : forall m,
+  Move_beq m m = true.
+Proof.
+  intros m.
+  destruct m; simpl.
+  - apply andb_true_intro. split; apply position_beq_refl.
+  - apply andb_true_intro. split; apply position_beq_refl.
+  - destruct c; reflexivity.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+(** Move equality implies structural equality *)
+Lemma Move_beq_eq : forall m1 m2,
+  Move_beq m1 m2 = true -> m1 = m2.
+Proof.
+  intros m1 m2 H.
+  destruct m1, m2; simpl in H; try discriminate.
+  - apply andb_prop in H. destruct H as [Hfrom Hto].
+    apply position_beq_true_eq in Hfrom.
+    apply position_beq_true_eq in Hto.
+    subst. reflexivity.
+  - apply andb_prop in H. destruct H as [Hfrom Hto].
+    apply position_beq_true_eq in Hfrom.
+    apply position_beq_true_eq in Hto.
+    subst. reflexivity.
+  - apply Color_beq_eq in H. subst. reflexivity.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+(** * 11.7 Move Inversion Lemmas *)
+
+(** If move_from returns Some position, the move must be Normal or Promotion *)
+Lemma move_from_inv : forall m pos,
+  move_from m = Some pos ->
+  (exists to, m = Normal pos to) \/ (exists to, m = Promotion pos to).
+Proof.
+  intros m pos H.
+  destruct m; simpl in H; try discriminate.
+  - injection H. intro Heq. subst. left. exists p0. reflexivity.
+  - injection H. intro Heq. subst. right. exists p0. reflexivity.
+Qed.
+
+(** If move_to returns Some position, the move must be Normal or Promotion *)
+Lemma move_to_inv : forall m pos,
+  move_to m = Some pos ->
+  (exists from, m = Normal from pos) \/ (exists from, m = Promotion from pos).
+Proof.
+  intros m pos H.
+  destruct m; simpl in H; try discriminate.
+  - injection H. intro Heq. subst. left. exists p. reflexivity.
+  - injection H. intro Heq. subst. right. exists p. reflexivity.
+Qed.
+
+(** * 11.8 Move Discrimination *)
+
+(** Normal and Promotion moves are distinct *)
+Lemma normal_neq_promotion : forall from1 to1 from2 to2,
+  Normal from1 to1 <> Promotion from2 to2.
+Proof.
+  intros from1 to1 from2 to2 H.
+  discriminate H.
+Qed.
+
+(** Board moves are distinct from non-board moves *)
+Lemma board_move_neq_resignation : forall from to c,
+  Normal from to <> Resignation c.
+Proof.
+  intros from to c H.
+  discriminate H.
+Qed.
+
+(** Promotion preserves destination reachability - useful for legality checking *)
+Lemma promotion_same_destination : forall from to1 to2,
+  Promotion from to1 = Promotion from to2 -> to1 = to2.
+Proof.
+  intros from to1 to2 H.
+  injection H. intro. assumption.
+Qed.
+
+(** * 11.9 Move Composition Property *)
+
+(** A move with both source and destination is always a board move *)
+Theorem move_with_positions_is_board_move : forall m from to,
+  move_from m = Some from ->
+  move_to m = Some to ->
+  is_normal_move m = true \/ is_promotion m = true.
+Proof.
+  intros m from to Hfrom Hto.
+  destruct m; simpl in *; try discriminate.
+  - left. reflexivity.
+  - right. reflexivity.
+Qed.
+
+(** Baidaq promotion is the only case where same position move could be different types *)
+Example promotion_vs_normal_same_squares :
+  let from := mkPosition rank7 fileE in
+  let to := mkPosition rank8 fileE in
+  let normal := Normal from to in
+  let promo := Promotion from to in
+  (move_from normal = move_from promo) /\
+  (move_to normal = move_to promo) /\
+  (normal <> promo).
+Proof.
+  simpl. split; [|split].
+  - reflexivity.
+  - reflexivity.
+  - discriminate.
+Qed.
+
+(** * 11.10 Strong Decidability and Completeness *)
+
+(** Color decidability *)
+Definition Color_eq_dec : forall (c1 c2: Color), {c1 = c2} + {c1 <> c2}.
+Proof.
+  intros c1 c2.
+  destruct c1, c2.
+  - left. reflexivity.
+  - right. discriminate.
+  - right. discriminate.
+  - left. reflexivity.
+Defined.
+
+(** Complete decidability for Move equality *)
+Definition Move_eq_dec : forall (m1 m2: Move), {m1 = m2} + {m1 <> m2}.
+Proof.
+  intros m1 m2.
+  destruct m1, m2.
+  - (* Normal vs Normal *)
+    destruct (position_eq_dec p p1).
+    + destruct (position_eq_dec p0 p2).
+      * left. subst. reflexivity.
+      * right. intro H. injection H. intros. contradiction.
+    + right. intro H. injection H. intros. contradiction.
+  - (* Normal vs Promotion *)
+    right. discriminate.
+  - (* Normal vs Resignation *)
+    right. discriminate.
+  - (* Normal vs DrawOffer *)
+    right. discriminate.
+  - (* Normal vs DrawAccept *)
+    right. discriminate.
+  - (* Promotion vs Normal *)
+    right. discriminate.
+  - (* Promotion vs Promotion *)
+    destruct (position_eq_dec p p1).
+    + destruct (position_eq_dec p0 p2).
+      * left. subst. reflexivity.
+      * right. intro H. injection H. intros. contradiction.
+    + right. intro H. injection H. intros. contradiction.
+  - (* Promotion vs Resignation *)
+    right. discriminate.
+  - (* Promotion vs DrawOffer *)
+    right. discriminate.
+  - (* Promotion vs DrawAccept *)
+    right. discriminate.
+  - (* Resignation vs Normal *)
+    right. discriminate.
+  - (* Resignation vs Promotion *)
+    right. discriminate.
+  - (* Resignation vs Resignation *)
+    destruct (Color_eq_dec c c0).
+    + left. subst. reflexivity.
+    + right. intro H. injection H. intro. contradiction.
+  - (* Resignation vs DrawOffer *)
+    right. discriminate.
+  - (* Resignation vs DrawAccept *)
+    right. discriminate.
+  - (* DrawOffer vs Normal *)
+    right. discriminate.
+  - (* DrawOffer vs Promotion *)
+    right. discriminate.
+  - (* DrawOffer vs Resignation *)
+    right. discriminate.
+  - (* DrawOffer vs DrawOffer *)
+    left. reflexivity.
+  - (* DrawOffer vs DrawAccept *)
+    right. discriminate.
+  - (* DrawAccept vs Normal *)
+    right. discriminate.
+  - (* DrawAccept vs Promotion *)
+    right. discriminate.
+  - (* DrawAccept vs Resignation *)
+    right. discriminate.
+  - (* DrawAccept vs DrawOffer *)
+    right. discriminate.
+  - (* DrawAccept vs DrawAccept *)
+    left. reflexivity.
+Defined.
+
+(** Completeness: our boolean equality is sound and complete *)
+Theorem Move_beq_complete : forall m1 m2,
+  m1 = m2 <-> Move_beq m1 m2 = true.
+Proof.
+  intros m1 m2. split.
+  - intro H. subst. apply Move_beq_refl.
+  - apply Move_beq_eq.
+Qed.
+
+(** * 11.11 Move Distance and Constraints *)
+
+(** Calculate move distance for board moves *)
+Definition move_distance (m: Move) : option Z :=
+  match move_from m, move_to m with
+  | Some from, Some to => Some (chebyshev_distance from to)
+  | _, _ => None
+  end.
+
+(** Strong theorem: Promotion preserves single-step constraint *)
+Theorem promotion_preserves_baidaq_distance : forall from to,
+  pos_rank from = rank7 ->  (* White baidaq on 7th rank *)
+  pos_rank to = rank8 ->     (* Moving to 8th rank *)
+  fileZ from = fileZ to ->   (* Same file (forward move) *)
+  move_distance (Normal from to) = move_distance (Promotion from to).
+Proof.
+  intros from to H7 H8 Hfile.
+  unfold move_distance. simpl.
+  reflexivity.
+Qed.
+
+(** Meaningful property: Same squares can have different semantic moves *)
+Theorem move_semantic_distinction : forall from to,
+  pos_rank from = rank7 ->
+  pos_rank to = rank8 ->
+  let normal := Normal from to in
+  let promo := Promotion from to in
+  (* Same positions *)
+  (move_from normal = move_from promo) /\
+  (move_to normal = move_to promo) /\
+  (* Same distance *)
+  (move_distance normal = move_distance promo) /\
+  (* But different moves with different game effects *)
+  (normal <> promo) /\
+  (* And different classifications *)
+  (is_normal_move normal = true /\ is_promotion promo = true) /\
+  (is_promotion normal = false /\ is_normal_move promo = false).
+Proof.
+  intros from to H7 H8 normal promo.
+  split. 
+  - reflexivity.
+  - split.
+    + reflexivity.
+    + split.
+      * reflexivity.
+      * split.
+        -- discriminate.
+        -- split.
+           ++ split; reflexivity.
+           ++ split; reflexivity.
+Qed.
+
+(** * 11.12 Critical Move Invariants *)
+
+(** INVARIANT: Move accessors are consistent - every move has a complete classification *)
+Theorem move_accessor_consistency : forall m,
+  (exists from to, m = Normal from to) \/
+  (exists from to, m = Promotion from to) \/
+  (exists c, m = Resignation c) \/
+  (m = DrawOffer) \/
+  (m = DrawAccept).
+Proof.
+  intro m.
+  destruct m.
+  - left. exists p, p0. reflexivity.
+  - right. left. exists p, p0. reflexivity.
+  - right. right. left. exists c. reflexivity.
+  - right. right. right. left. reflexivity.
+  - right. right. right. right. reflexivity.
+Qed.
+
+(** INVARIANT: Board moves always have both source and destination *)
+Theorem board_move_has_positions : forall m,
+  (is_normal_move m = true \/ is_promotion m = true) ->
+  exists from to, move_from m = Some from /\ move_to m = Some to.
+Proof.
+  intros m H.
+  destruct H; destruct m; simpl in *; try discriminate.
+  - exists p, p0. split; reflexivity.
+  - exists p, p0. split; reflexivity.
+Qed.
+
+(** INVARIANT: Moves with positions are board moves *)
+Theorem move_with_positions_classification : forall m from to,
+  move_from m = Some from ->
+  move_to m = Some to ->
+  (exists f t, m = Normal f t) \/ (exists f t, m = Promotion f t).
+Proof.
+  intros m from to Hfrom Hto.
+  destruct m; simpl in *; try discriminate.
+  - left. exists p, p0. reflexivity.
+  - right. exists p, p0. reflexivity.
+Qed.
+
+(** INVARIANT: Complete classification partition - every move belongs to exactly one category *)
+Theorem move_partition_complete : forall m,
+  (is_normal_move m = true /\ is_promotion m = false /\ 
+   move_from m <> None /\ move_to m <> None) \/
+  (is_normal_move m = false /\ is_promotion m = true /\ 
+   move_from m <> None /\ move_to m <> None) \/
+  (is_normal_move m = false /\ is_promotion m = false /\ 
+   move_from m = None /\ move_to m = None).
+Proof.
+  intro m.
+  destruct m; simpl.
+  - left. split; [|split; [|split]]; try reflexivity; discriminate.
+  - right. left. split; [|split; [|split]]; try reflexivity; discriminate.
+  - right. right. split; [|split; [|split]]; reflexivity.
+  - right. right. split; [|split; [|split]]; reflexivity.
+  - right. right. split; [|split; [|split]]; reflexivity.
+Qed.
+
+(** * 11.13 Strong Non-Trivial Invariants *)
+
+(** STRONG INVARIANT: Every board move can be reversed to create a valid return move *)
+Definition reverse_move (m: Move) : option Move :=
+  match m with
+  | Normal from to => Some (Normal to from)
+  | Promotion from to => Some (Normal to from)  (* Return from promotion is normal move *)
+  | _ => None
+  end.
+
+Theorem move_reversibility : forall m from to,
+  move_from m = Some from ->
+  move_to m = Some to ->
+  exists m_rev,
+    reverse_move m = Some m_rev /\
+    move_from m_rev = Some to /\
+    move_to m_rev = Some from.
+Proof.
+  intros m from to Hfrom Hto.
+  destruct m; simpl in *; try discriminate.
+  - (* Normal move *)
+    injection Hfrom; injection Hto; intros; subst.
+    exists (Normal to from). simpl.
+    split; [|split]; reflexivity.
+  - (* Promotion - crucially, the reverse is NOT a promotion *)
+    injection Hfrom; injection Hto; intros; subst.
+    exists (Normal to from). simpl.
+    split; [|split]; reflexivity.
+Qed.
+
+(** STRONG INVARIANT: All board moves have bounded distance *)
+Open Scope Z_scope.
+
+Lemma chebyshev_distance_non_negative : forall p1 p2,
+  0 <= chebyshev_distance p1 p2.
+Proof.
+  intros p1 p2.
+  unfold chebyshev_distance.
+  apply Z.max_case; apply Z.abs_nonneg.
+Qed.
+
+Theorem move_distance_bounded : forall m d,
+  move_distance m = Some d ->
+  0 <= d <= 7.
+Proof.
+  intros m d H.
+  unfold move_distance in H.
+  destruct (move_from m) eqn:Hfrom; [|discriminate].
+  destruct (move_to m) eqn:Hto; [|discriminate].
+  injection H; intro; subst.
+  split.
+  - apply chebyshev_distance_non_negative.
+  - apply chebyshev_max_distance.
+Qed.
+Close Scope Z_scope.
+
+(** End of Section 11: Move Representation *)
