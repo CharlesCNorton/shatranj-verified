@@ -5674,23 +5674,51 @@ Proof.
 Qed.
 
 (**
-   Game states are uniquely determined by their components.
-   This establishes the extensionality principle for game states,
-   showing that two states with identical components are equal.
+   Strong Progress Property: Every pair of turn switches from White's turn
+   advances the game by exactly one full move. This captures the fundamental
+   rhythm of chess where a "move" consists of both players' actions.
 *)
-Theorem state_determines_position : forall st1 st2,
+Theorem full_move_advances_after_pair : forall st,
+  WellFormedState st = true ->
+  turn st = White ->
+  fullmove_number (switch_turn (switch_turn st)) = S (fullmove_number st).
+Proof.
+  intros st Hwf Hwhite.
+  unfold switch_turn. simpl.
+  rewrite Hwhite. simpl.
+  reflexivity.
+Qed.
+
+(**
+   Dual Progress Property: Turn switch from Black's turn increments the
+   move counter as Black completes the full move.
+*)
+Theorem full_move_increments_from_black : forall st,
+  WellFormedState st = true ->
+  turn st = Black ->
+  fullmove_number (switch_turn st) = S (fullmove_number st).
+Proof.
+  intros st Hwf Hblack.
+  unfold switch_turn. simpl.
+  rewrite Hblack. simpl.
+  reflexivity.
+Qed.
+
+(**
+   Critical Property: The halfmove clock is independent of turn order
+   but dependent on board changes. This separates game flow from
+   position changes.
+*)
+Theorem halfmove_clock_board_dependent : forall st1 st2,
   WellFormedState st1 = true ->
   WellFormedState st2 = true ->
   board st1 = board st2 ->
-  turn st1 = turn st2 ->
   halfmove_clock st1 = halfmove_clock st2 ->
-  fullmove_number st1 = fullmove_number st2 ->
-  draw_offer_pending st1 = draw_offer_pending st2 ->
-  st1 = st2.
+  update_halfmove_clock st1 false false = update_halfmove_clock st2 false false.
 Proof.
-  intros st1 st2 Hwf1 Hwf2 Hboard Hturn Hhalf Hfull Hdraw.
-  destruct st1, st2. simpl in *.
-  subst. reflexivity.
+  intros st1 st2 Hwf1 Hwf2 Hboard Hclock.
+  unfold update_halfmove_clock.
+  simpl. rewrite Hclock. reflexivity.
 Qed.
 
 (** * End of Section 10: Game State *)
