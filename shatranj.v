@@ -6422,3 +6422,169 @@ Lemma in_check_board_only : forall b1 b2 c,
 Proof.
   intros b1 b2 c Heq. subst. reflexivity.
 Qed.
+
+(** * 12.4 Helper Lemmas for Legal Move Validation *)
+
+(** Helper: legal_move_impl checks that the piece belongs to current player *)
+Lemma legal_move_checks_ownership : forall st from to,
+  legal_move_impl st (Normal from to) = true ->
+  exists pc, (board st)[from] = Some pc /\ piece_color pc = turn st.
+Proof.
+  intros st from to H.
+  unfold legal_move_impl in H.
+  destruct ((board st)[from]) eqn:Hpiece; [|discriminate].
+  apply andb_prop in H. destruct H as [Hcolor _].
+  apply Color_beq_eq in Hcolor.
+  exists p. split; [reflexivity|exact Hcolor].
+Qed.
+
+(** Helper: legal_move_impl ensures no check after Normal move *)
+Lemma legal_normal_move_no_check : forall st from to,
+  legal_move_impl st (Normal from to) = true ->
+  match (board st)[from] with
+  | None => False
+  | Some pc =>
+      let b_after := board_move (board st) from to in
+      match find_shah b_after (turn st) with
+      | None => False
+      | Some shah_pos => 
+          position_under_attack_by b_after shah_pos (opposite_color (turn st)) = false
+      end
+  end.
+Proof.
+  intros st from to H.
+  unfold legal_move_impl in H.
+  destruct ((board st)[from]) eqn:Hpiece.
+  - (* Some piece *)
+    apply andb_prop in H. destruct H as [_ Hrest].
+    apply andb_prop in Hrest. destruct Hrest as [_ Hcheck].
+    simpl.
+    destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hshah.
+    + apply negb_true_iff in Hcheck. exact Hcheck.
+    + discriminate Hcheck.
+  - (* None *)
+    discriminate H.
+Qed.
+
+(** Example: Moving into check is illegal - demonstrates helper lemmas *)
+Example cannot_move_shah_into_rukh_attack :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileF) then Some black_rukh
+    else None in
+  let st := mkGameState b White 0 1 false in
+  (* White Shah at e1 cannot move to f1 because Black Rukh at f8 attacks it *)
+  legal_move_impl st (Normal (mkPosition rank1 fileE) (mkPosition rank1 fileF)) = false.
+Proof.
+  simpl.
+  unfold legal_move_impl, can_move_piece, shah_move_impl.
+  simpl.
+  reflexivity.
+Qed.
+
+(** Helper: Board relationship after apply_move for Normal moves *)
+Lemma apply_normal_move_board : forall st from to st',
+  apply_move_impl st (Normal from to) = Some st' ->
+  exists pc, (board st)[from] = Some pc /\
+    board st' = 
+      if andb (PieceType_beq (piece_type pc) Baidaq)
+              (baidaq_at_promotion_rank to (piece_color pc))
+      then board_place (board_move (board st) from to) to (mkPiece (piece_color pc) Ferz)
+      else board_move (board st) from to.
+Proof.
+  intros st from to st' H.
+  unfold apply_move_impl in H.
+  destruct ((board st)[from]) eqn:Hpiece; [|discriminate].
+  injection H; intro Heq. rewrite <- Heq. simpl.
+  exists p. split; [reflexivity|reflexivity].
+Qed.
+
+Lemma baidaq_not_shah :
+  PieceType_beq Baidaq Shah = false.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma baidaq_not_shah_piece : forall pc,
+  piece_type pc = Baidaq -> 
+  is_shah pc = false.
+Proof.
+  intros pc H.
+  unfold is_shah.
+  rewrite H.
+  reflexivity.
+Qed.
+
+Lemma baidaq_cannot_be_shah : forall (b: Board) from pc,
+  b[from] = Some pc ->
+  piece_type pc = Baidaq ->
+  is_shah pc = false.
+Proof.
+  intros b from pc Hpc Htype.
+  unfold is_shah.
+  rewrite Htype.
+  reflexivity.
+Qed.
+
+Lemma promotion_piece_is_ferz : forall c,
+  piece_type (mkPiece c Ferz) = Ferz.
+Proof.
+  intro c. reflexivity.
+Qed.
+
+Lemma ferz_is_not_shah : 
+  PieceType_beq Ferz Shah = false.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma board_move_preserves_other_positions : forall b from to pos,
+  pos <> from ->
+  pos <> to ->
+  (board_move b from to)[pos] = b[pos].
+Proof.
+  intros b from to pos Hfrom Hto.
+  unfold board_move.
+  destruct (b[from]).
+  - simpl.
+    destruct (position_eq_dec to pos).
+    + subst. contradiction.
+    + destruct (position_eq_dec from pos).
+      * subst. contradiction.
+      * reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma board_place_only_changes_target : forall b pos pc other_pos,
+  other_pos <> pos ->
+  (board_place b pos pc)[other_pos] = b[other_pos].
+Proof.
+  intros b pos pc other_pos Hneq.
+  unfold board_place.
+  simpl.
+  destruct (position_eq_dec pos other_pos).
+  - subst. contradiction.
+  - reflexivity.
+Qed.
+
+(** Legal_move_impl checks the actual result board *)
+Lemma legal_move_impl_checks_result_board : forall st from to pc,
+  (board st)[from] = Some pc ->
+  legal_move_impl st (Normal from to) = true ->
+  let result_board := board_move (board st) from to in
+  match find_shah result_board (turn st) with
+  | None => False
+  | Some shah_pos => 
+      position_under_attack_by result_board shah_pos (opposite_color (turn st)) = false
+  end.
+Proof.
+  intros st from to pc Hpiece Hlegal.
+  unfold legal_move_impl in Hlegal.
+  rewrite Hpiece in Hlegal.
+  apply andb_prop in Hlegal. destruct Hlegal as [_ Hrest].
+  apply andb_prop in Hrest. destruct Hrest as [_ Hcheck].
+  simpl.
+  destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hshah.
+  - apply negb_true_iff in Hcheck. exact Hcheck.
+  - discriminate Hcheck.
+Qed.
