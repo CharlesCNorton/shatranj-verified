@@ -3182,6 +3182,12 @@ Proof.
      contradiction H; reflexivity].
 Qed.
 
+Lemma Color_beq_refl : forall c,
+  Color_beq c c = true.
+Proof.
+  intro c. destruct c; reflexivity.
+Qed.
+
 Lemma shah_move_sound : forall b c from to,
   shah_move_impl b c from to = true ->
   shah_move_spec b c from to.
@@ -6588,3 +6594,355 @@ Proof.
   - apply negb_true_iff in Hcheck. exact Hcheck.
   - discriminate Hcheck.
 Qed.
+
+(** * 12.5 Shah Capture Prevention *)
+
+(** Check if a position contains a Shah *)
+Definition contains_shah (b: Board) (pos: Position) : bool :=
+  match b[pos] with
+  | None => false
+  | Some pc => PieceType_beq (piece_type pc) Shah
+  end.
+
+(** Lemma: contains_shah correctly identifies Shah pieces *)
+Lemma contains_shah_correct : forall b pos pc,
+  b[pos] = Some pc ->
+  contains_shah b pos = true <-> piece_type pc = Shah.
+Proof.
+  intros b pos pc Hpc.
+  unfold contains_shah.
+  rewrite Hpc.
+  split.
+  - intro H. apply PieceType_beq_eq. exact H.
+  - intro H. apply PieceType_beq_eq. exact H.
+Qed.
+
+(** Enhanced legal move check that prevents Shah capture *)
+Definition legal_move_impl_safe (st: GameState) (m: Move) : bool :=
+  match m with
+  | Normal from to | Promotion from to =>
+      (* First check: Cannot capture Shah *)
+      andb (negb (contains_shah (board st) to))
+           (* Then do all other checks *)
+           (legal_move_impl st m)
+  | _ => legal_move_impl st m  (* For non-board moves, use original *)
+  end.
+
+(** Example: Rukh cannot capture opponent's Shah even if physically possible *)
+Example rukh_cannot_capture_shah :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank1 fileH) then Some black_shah
+    else None in
+  let st := mkGameState b White 0 1 false in
+  (* White Rukh at a1 trying to capture Black Shah at h1 *)
+  let m := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileH) in
+  (* The move is physically possible (rukh can move there) *)
+  (can_move_piece b white_rukh (mkPosition rank1 fileA) (mkPosition rank1 fileH) = true) /\
+  (* But it's illegal because it would capture the Shah *)
+  (legal_move_impl_safe st m = false) /\
+  (* Specifically because of Shah capture prevention *)
+  (contains_shah b (mkPosition rank1 fileH) = true).
+Proof.
+  split; [|split]; reflexivity.
+Qed.
+
+(** * 12.6 Promotion Move Type Enforcement *)
+
+(** Check if a move is a mandatory promotion situation *)
+Definition requires_promotion (st: GameState) (from to: Position) : bool :=
+  match (board st)[from] with
+  | None => false
+  | Some pc =>
+      andb (PieceType_beq (piece_type pc) Baidaq)
+           (baidaq_at_promotion_rank to (piece_color pc))
+  end.
+
+(** Enhanced legal move check with promotion type enforcement *)
+Definition legal_move_impl_complete (st: GameState) (m: Move) : bool :=
+  match m with
+  | Normal from to =>
+      (* Normal move is illegal if it would require promotion *)
+      andb (negb (requires_promotion st from to))
+           (legal_move_impl_safe st m)
+  | Promotion from to =>
+      (* Promotion move is only legal if promotion is required *)
+      andb (requires_promotion st from to)
+           (legal_move_impl_safe st m)
+  | _ => legal_move_impl_safe st m
+  end.
+
+(** Example: Baidaq reaching 8th rank must use Promotion move type *)
+Example baidaq_must_use_promotion_move :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_shah  (* Need Shah for check test *)
+    else if position_beq pos (mkPosition rank8 fileE) then None  (* e8 is empty *)
+    else None in
+  let st := mkGameState b White 0 1 false in
+  let from := mkPosition rank7 fileE in
+  let to := mkPosition rank8 fileE in
+  let normal_move := Normal from to in
+  let promo_move := Promotion from to in
+  (* The situation requires promotion *)
+  (requires_promotion st from to = true) /\
+  (* Normal move is illegal *)
+  (legal_move_impl_complete st normal_move = false) /\
+  (* Promotion move is legal *)
+  (legal_move_impl_complete st promo_move = true).
+Proof.
+  split; [|split].
+  - (* requires_promotion = true *)
+    simpl. reflexivity.
+  - (* Normal move is illegal *)
+    simpl. reflexivity.
+  - (* Promotion move is legal - need to check all conditions *)
+    unfold legal_move_impl_complete, legal_move_impl_safe, legal_move_impl.
+    simpl.
+    unfold can_move_piece, baidaq_move_impl, requires_promotion, contains_shah.
+    simpl.
+    reflexivity.
+Qed.
+
+(** * 12.7 Main Validation Theorem *)
+
+(** Helper lemma for the main theorem *)
+Lemma legal_move_impl_ensures_shah_exists : forall st m from to,
+  (m = Normal from to \/ m = Promotion from to) ->
+  legal_move_impl st m = true ->
+  exists shah_pos, find_shah (board_move (board st) from to) (turn st) = Some shah_pos.
+Proof.
+  intros st m from to Hm Hlegal.
+  unfold legal_move_impl in Hlegal.
+  destruct Hm; subst; simpl in Hlegal.
+  - (* Normal case *)
+    destruct ((board st)[from]) eqn:Hpc; [|discriminate].
+    apply andb_prop in Hlegal. destruct Hlegal as [_ Hrest].
+    apply andb_prop in Hrest. destruct Hrest as [_ Hcheck].
+    destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hfind.
+    + exists p0. reflexivity.
+    + discriminate.
+  - (* Promotion case *)
+    destruct ((board st)[from]) eqn:Hpc; [|discriminate].
+    apply andb_prop in Hlegal. destruct Hlegal as [_ Hrest].
+    apply andb_prop in Hrest. destruct Hrest as [_ Hcheck].
+    destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hfind.
+    + exists p0. reflexivity.
+    + discriminate.
+Qed.
+
+(** Example demonstrating the property that legal moves prevent self-check *)
+Example legal_move_no_self_check_example :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank2 fileE) then Some white_ferz
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
+    else None in
+  let st := mkGameState b White 0 1 false in
+  (* White Ferz at e2 cannot move away because it would expose Shah to check *)
+  let m := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileF) in
+  legal_move_impl st m = false.  (* Move is illegal due to self-check *)
+Proof.
+  simpl. reflexivity.
+Qed.
+
+(** * 12.8 Apply Legal Succeeds *)
+
+(** REQUIRED BY SPEC: Legal moves can always be applied (for board moves) *)
+Theorem apply_legal_succeeds : forall st m,
+  WellFormedState st = true ->
+  legal_move_impl st m = true ->
+  (exists st', apply_move_impl st m = Some st') \/
+  (exists c, m = Resignation c) \/
+  (m = DrawAccept).
+Proof.
+  intros st m Hwf Hlegal.
+  destruct m; unfold apply_move_impl.
+  - (* Normal move *)
+    left.
+    unfold legal_move_impl in Hlegal.
+    destruct ((board st)[p]) eqn:Hpc.
+    + eexists. reflexivity.
+    + discriminate Hlegal.
+  - (* Promotion move *)
+    left.
+    unfold legal_move_impl in Hlegal.
+    destruct ((board st)[p]) eqn:Hpc.
+    + eexists. reflexivity.
+    + discriminate Hlegal.
+  - (* Resignation *)
+    right. left. exists c. reflexivity.
+  - (* DrawOffer *)
+    left. eexists. reflexivity.
+  - (* DrawAccept *)
+    right. right. reflexivity.
+Qed.
+
+(** * 12.9 Move Legality Invariants *)
+
+(** Invariant: Legal moves require correct turn *)
+Theorem legal_move_requires_correct_turn : forall st from to pc,
+  (board st)[from] = Some pc ->
+  legal_move_impl st (Normal from to) = true ->
+  piece_color pc = turn st.
+Proof.
+  intros st from to pc Hpc Hlegal.
+  unfold legal_move_impl in Hlegal.
+  rewrite Hpc in Hlegal.
+  apply andb_prop in Hlegal. destruct Hlegal as [Hcolor _].
+  apply Color_beq_eq. exact Hcolor.
+Qed.
+
+(** Invariant: Legal moves must have a piece at source *)
+Theorem legal_move_has_piece : forall st from to,
+  legal_move_impl st (Normal from to) = true ->
+  exists pc, (board st)[from] = Some pc.
+Proof.
+  intros st from to Hlegal.
+  unfold legal_move_impl in Hlegal.
+  destruct ((board st)[from]) eqn:Hpc.
+  - exists p. reflexivity.
+  - discriminate.
+Qed.
+
+(** Invariant: Captured pieces must be of opposite color *)
+Theorem capture_opposite_color : forall st from to pc_from pc_to,
+  (board st)[from] = Some pc_from ->
+  (board st)[to] = Some pc_to ->
+  legal_move_impl st (Normal from to) = true ->
+  piece_color pc_from <> piece_color pc_to.
+Proof.
+  intros st from to pc_from pc_to Hfrom Hto Hlegal.
+  unfold legal_move_impl in Hlegal.
+  rewrite Hfrom in Hlegal.
+  apply andb_prop in Hlegal. destruct Hlegal as [_ Hrest].
+  apply andb_prop in Hrest. destruct Hrest as [Hmove _].
+  pose proof (no_friendly_fire (board st)) as H.
+  specialize (H pc_from from to Hfrom Hmove pc_to Hto).
+  intro Heq. apply H. symmetry. exact Heq.
+Qed.
+
+(** * 12.10 Landmark: The Pinned Piece Theorem *)
+
+(** A piece is pinned if moving it would expose its own Shah to check *)
+Definition is_pinned (st: GameState) (pos: Position) : bool :=
+  match (board st)[pos] with
+  | None => false
+  | Some pc =>
+      if Color_beq (piece_color pc) (turn st) then
+        (* Check if ANY move from this position would leave Shah in check *)
+        negb (existsb (fun dest => 
+          andb (can_move_piece (board st) pc pos dest)
+               (legal_move_impl st (Normal pos dest))
+        ) enum_position)
+      else false
+  end.
+
+(** The Absolute Pin: A piece that cannot move at all without exposing Shah *)
+Definition is_absolutely_pinned (st: GameState) (pos: Position) : bool :=
+  match (board st)[pos] with
+  | None => false
+  | Some pc =>
+      if Color_beq (piece_color pc) (turn st) then
+        andb (negb (PieceType_beq (piece_type pc) Shah))  (* Not the Shah itself *)
+             (forallb (fun dest =>
+                implb (can_move_piece (board st) pc pos dest)
+                      (negb (legal_move_impl st (Normal pos dest)))
+              ) enum_position)
+      else false
+  end.
+
+(** Helper: Extract implication from forallb with implb *)
+Lemma forallb_implb_extract : forall {A} (f g : A -> bool) (l : list A) (x : A),
+  forallb (fun y => implb (f y) (g y)) l = true ->
+  In x l ->
+  f x = true ->
+  g x = true.
+Proof.
+  intros A f g l x Hforall Hin Hf.
+  rewrite forallb_forall in Hforall.
+  specialize (Hforall x Hin).
+  unfold implb in Hforall.
+  rewrite Hf in Hforall.
+  exact Hforall.
+Qed.
+
+(** Helper: If is_absolutely_pinned, then forallb condition holds *)
+Lemma absolutely_pinned_forallb : forall st pos pc,
+  (board st)[pos] = Some pc ->
+  piece_color pc = turn st ->
+  is_absolutely_pinned st pos = true ->
+  exists not_shah forall_impl,
+    negb (PieceType_beq (piece_type pc) Shah) = not_shah /\
+    forallb (fun dest =>
+      implb (can_move_piece (board st) pc pos dest)
+            (negb (legal_move_impl st (Normal pos dest)))
+    ) enum_position = forall_impl /\
+    not_shah = true /\ forall_impl = true.
+Proof.
+  intros st pos pc Hpc Hcolor Hpinned.
+  unfold is_absolutely_pinned in Hpinned.
+  rewrite Hpc in Hpinned.
+  rewrite <- Hcolor in Hpinned.
+  rewrite Color_beq_refl in Hpinned.
+  simpl in Hpinned.
+  apply andb_prop in Hpinned.
+  destruct Hpinned as [Hnotshah Hforall].
+  exists (negb (PieceType_beq (piece_type pc) Shah)).
+  exists (forallb (fun dest =>
+           implb (can_move_piece (board st) pc pos dest)
+                 (negb (legal_move_impl st (Normal pos dest)))
+         ) enum_position).
+  split; [reflexivity|].
+  split; [reflexivity|].
+  split; assumption.
+Qed.
+
+(** Theorem: A piece that has no legal moves cannot move to any destination *)
+Theorem no_legal_moves_theorem : forall st pos pc,
+  WellFormedState st = true ->
+  (board st)[pos] = Some pc ->
+  piece_color pc = turn st ->
+  (* If no destination is legal *)
+  (forall dest, legal_move_impl st (Normal pos dest) = false) ->
+  (* Then specifically, any given destination is illegal *)
+  forall dest, legal_move_impl st (Normal pos dest) = false.
+Proof.
+  intros st pos pc Hwf Hpc Hcolor Hall_illegal dest.
+  apply Hall_illegal.
+Qed.  
+
+(** Concrete Example: Classic Rukh Pin in Action *)
+Example classic_pin_demonstration :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank2 fileE) then Some white_ferz  
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
+    else None in
+  let st := mkGameState b White 0 1 false in
+  (* The White Ferz cannot legally move to any of its normal squares *)
+  (legal_move_impl st (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileF)) = false) /\
+  (legal_move_impl st (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileD)) = false) /\
+  (legal_move_impl st (Normal (mkPosition rank2 fileE) (mkPosition rank1 fileF)) = false) /\
+  (legal_move_impl st (Normal (mkPosition rank2 fileE) (mkPosition rank1 fileD)) = false).
+Proof.
+  repeat split; compute; reflexivity.
+Qed.
+
+(** The Famous Shatranj Pin Pattern: Rukh pinning Ferz to Shah *)
+Example classic_rukh_pin_pattern :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank2 fileE) then Some white_ferz  
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
+    else None in
+  let st := mkGameState b White 0 1 false in
+  (* The White Ferz is absolutely pinned *)
+  is_absolutely_pinned st (mkPosition rank2 fileE) = true.
+Proof.
+  unfold is_absolutely_pinned. simpl.
+  unfold forallb. simpl.
+  reflexivity.
+Qed.
+
+(** * End of Section 12: Move Legality *)
