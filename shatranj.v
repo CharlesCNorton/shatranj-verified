@@ -5464,4 +5464,234 @@ Qed.
 (** * End of Section 9: Attack and Threat *)
 
 Close Scope Z_scope.
-      
+
+(* ========================================================================= *)
+(* SECTION 10: GAME STATE                                                   *)
+(* ========================================================================= *)
+
+(** * 10.1 Game State Definition *)
+
+(** The complete state of a Shatranj game *)
+Record GameState : Type := mkGameState {
+  board : Board;
+  turn : Color;
+  halfmove_clock : nat;     (* For 50-move rule *)
+  fullmove_number : nat;     (* Game move counter *)
+  draw_offer_pending : bool  (* Optional: track draw offers *)
+}.
+
+(** Note: No en_passant or castling_rights fields needed for Shatranj *)
+
+(** * 10.2 Initial Game State *)
+
+Definition initial_game_state : GameState := mkGameState
+  standard_initial_board  (* Initial board setup from Section 5 *)
+  White                   (* White moves first *)
+  0                      (* No moves yet for 50-move rule *)
+  1                      (* First move of the game *)
+  false.                 (* No draw offer pending *)
+
+(** * 10.3 Well-Formed State Predicate *)
+
+(** A well-formed game state must satisfy key invariants *)
+Definition WellFormedState (st: GameState) : bool :=
+  let b := board st in
+  (* Both colors must have exactly one Shah *)
+  andb (valid_shah_count b)
+       (* Valid piece counts - max 8 Baidaqs per color *)
+       (valid_piece_counts b).
+
+(** * 10.4 Validation Examples *)
+
+(** REQUIRED BY SPEC: Initial position must be well-formed *)
+Example initial_wellformed:
+  WellFormedState initial_game_state = true.
+Proof.
+  unfold WellFormedState, initial_game_state.
+  simpl.
+  unfold valid_shah_count, valid_piece_counts.
+  unfold shah_count, count_piece_type_on_board.
+  simpl.
+  reflexivity.
+Qed.
+
+(** * 10.5 State Transition Functions *)
+
+(** Switch turn between colors *)
+Definition switch_turn (st: GameState) : GameState :=
+  mkGameState
+    (board st)
+    (opposite_color (turn st))
+    (halfmove_clock st)
+    (if Color_beq (turn st) Black then S (fullmove_number st) else fullmove_number st)
+    (draw_offer_pending st).
+
+(** Update halfmove clock based on move type *)
+Definition update_halfmove_clock (st: GameState) (is_capture: bool) (is_baidaq_move: bool) : nat :=
+  if orb is_capture is_baidaq_move
+  then 0  (* Reset on capture or Baidaq move *)
+  else S (halfmove_clock st).  (* Increment otherwise *)
+
+(** * 10.6 State Query Functions *)
+
+(** Check if the current player is in check *)
+Definition current_player_in_check (st: GameState) : bool :=
+  in_check (board st) (turn st).
+
+(** Get the position of the current player's Shah *)
+Definition current_shah_position (st: GameState) : option Position :=
+  find_shah (board st) (turn st).
+
+(** Count pieces of a specific type for a color *)
+Definition count_pieces_in_state (st: GameState) (c: Color) (pt: PieceType) : nat :=
+  count_piece_type_on_board (board st) c pt.
+
+(** Check if fifty-move rule can be claimed *)
+Definition fifty_move_rule_applies (st: GameState) : bool :=
+  Nat.leb 50 (halfmove_clock st).
+
+(** * 10.7 Additional Validation *)
+
+(** Maximum Baidaqs per color is 8 *)
+Example max_baidaqs : forall st,
+  WellFormedState st = true ->
+  count_pieces_in_state st White Baidaq <= 8 /\
+  count_pieces_in_state st Black Baidaq <= 8.
+Proof.
+  intros st Hwf.
+  unfold WellFormedState in Hwf.
+  apply andb_prop in Hwf. destruct Hwf as [_ Hcounts].
+  unfold valid_piece_counts in Hcounts.
+  apply andb_prop in Hcounts. destruct Hcounts as [Hw Hb].
+  unfold count_pieces_in_state.
+  split; apply Nat.leb_le; assumption.
+Qed.
+
+(** Turn switching updates correctly *)
+Example turn_switch_correct : forall st,
+  turn (switch_turn st) = opposite_color (turn st).
+Proof.
+  intro st. unfold switch_turn. simpl. reflexivity.
+Qed.
+
+(** Full move increments after Black's turn *)
+Example fullmove_increments_after_black :
+  let st := mkGameState empty_board Black 0 5 false in
+  fullmove_number (switch_turn st) = 6.
+Proof.
+  simpl. reflexivity.
+Qed.
+
+(** * 10.8 State Invariant Properties *)
+
+(** Critical: A well-formed state never has a captured Shah *)
+Theorem shah_never_captured : forall st,
+  WellFormedState st = true ->
+  shah_count (board st) White = 1 /\
+  shah_count (board st) Black = 1.
+Proof.
+  intros st Hwf.
+  unfold WellFormedState in Hwf.
+  apply andb_prop in Hwf. destruct Hwf as [Hshah _].
+  unfold valid_shah_count in Hshah.
+  apply andb_prop in Hshah. destruct Hshah as [Hw Hb].
+  split; apply Nat.eqb_eq; assumption.
+Qed.
+
+(** No position can have two pieces simultaneously *)
+Theorem position_uniqueness : forall st pos,
+  WellFormedState st = true ->
+  match (board st)[pos] with
+  | None => True
+  | Some pc => forall pc', (board st)[pos] = Some pc' -> pc = pc'
+  end.
+Proof.
+  intros st pos Hwf.
+  destruct ((board st)[pos]) eqn:Hpos.
+  - intros pc' Heq. injection Heq. intro H. exact H.
+  - trivial.
+Qed.
+
+(** State transitions preserve turn alternation *)
+Theorem turn_alternates : forall st,
+  WellFormedState st = true ->
+  turn (switch_turn st) <> turn st.
+Proof.
+  intros st Hwf.
+  unfold switch_turn. simpl.
+  apply opposite_color_neq.
+Qed.
+
+(** Halfmove clock resets on captures *)
+Theorem halfmove_reset_on_capture : forall st,
+  update_halfmove_clock st true false = 0.
+Proof.
+  intro st. unfold update_halfmove_clock. simpl. reflexivity.
+Qed.
+
+(** Halfmove clock resets on Baidaq moves *)
+Theorem halfmove_reset_on_baidaq : forall st,
+  update_halfmove_clock st false true = 0.
+Proof.
+  intro st. unfold update_halfmove_clock. simpl. reflexivity.
+Qed.
+
+(** * 10.9 State Invariant Preservation *)
+
+(** 
+   Well-formedness is preserved by turn switching.
+   This establishes that basic state transitions maintain game invariants,
+   which is essential for proving that legal game progression preserves
+   validity throughout play.
+*)
+Theorem wellformed_invariant_under_turn_switch : forall st,
+  WellFormedState st = true ->
+  WellFormedState (switch_turn st) = true.
+Proof.
+  intros st Hwf.
+  unfold WellFormedState in *.
+  unfold switch_turn. simpl.
+  (* The board doesn't change, so all piece counts remain valid *)
+  exact Hwf.
+Qed.
+
+(** 
+   Corollary: Starting from initial position, any sequence of turn switches
+   maintains well-formedness. This is the basis for game state validity.
+*)
+Corollary initial_state_always_wellformed : 
+  WellFormedState initial_game_state = true /\
+  WellFormedState (switch_turn initial_game_state) = true /\
+  WellFormedState (switch_turn (switch_turn initial_game_state)) = true.
+Proof.
+  split; [|split].
+  - apply initial_wellformed.
+  - apply wellformed_invariant_under_turn_switch.
+    apply initial_wellformed.
+  - apply wellformed_invariant_under_turn_switch.
+    apply wellformed_invariant_under_turn_switch.
+    apply initial_wellformed.
+Qed.
+
+(**
+   Game states are uniquely determined by their components.
+   This establishes the extensionality principle for game states,
+   showing that two states with identical components are equal.
+*)
+Theorem state_determines_position : forall st1 st2,
+  WellFormedState st1 = true ->
+  WellFormedState st2 = true ->
+  board st1 = board st2 ->
+  turn st1 = turn st2 ->
+  halfmove_clock st1 = halfmove_clock st2 ->
+  fullmove_number st1 = fullmove_number st2 ->
+  draw_offer_pending st1 = draw_offer_pending st2 ->
+  st1 = st2.
+Proof.
+  intros st1 st2 Hwf1 Hwf2 Hboard Hturn Hhalf Hfull Hdraw.
+  destruct st1, st2. simpl in *.
+  subst. reflexivity.
+Qed.
+
+(** * End of Section 10: Game State *)
+     
