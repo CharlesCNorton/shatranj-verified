@@ -2328,6 +2328,42 @@ Fixpoint path_clear_n (b: Board) (from: Position) (dr df: Z) (n: nat) : bool :=
 Definition path_clear (b: Board) (from to: Position) (dr df: Z) : bool :=
   path_clear_n b from dr df 7.
 
+Open Scope Z_scope.
+
+Lemma board_max_distance : forall p1 p2 : Position,
+  manhattan_distance p1 p2 <= 14.
+Proof.
+  intros p1 p2.
+  unfold manhattan_distance.
+  pose proof (rankZ_bounds p1) as [Hr1min Hr1max].
+  pose proof (rankZ_bounds p2) as [Hr2min Hr2max].
+  pose proof (fileZ_bounds p1) as [Hf1min Hf1max].
+  pose proof (fileZ_bounds p2) as [Hf2min Hf2max].
+  assert (Hr: Z.abs (rankZ p2 - rankZ p1) <= 7).
+  { apply Z.abs_le. split; lia. }
+  assert (Hf: Z.abs (fileZ p2 - fileZ p1) <= 7).
+  { apply Z.abs_le. split; lia. }
+  lia.
+Qed.
+
+Lemma chebyshev_max_distance : forall p1 p2 : Position,
+  chebyshev_distance p1 p2 <= 7.
+Proof.
+  intros p1 p2.
+  unfold chebyshev_distance.
+  pose proof (rankZ_bounds p1) as [Hr1min Hr1max].
+  pose proof (rankZ_bounds p2) as [Hr2min Hr2max].
+  pose proof (fileZ_bounds p1) as [Hf1min Hf1max].
+  pose proof (fileZ_bounds p2) as [Hf2min Hf2max].
+  assert (Hr: Z.abs (rankZ p2 - rankZ p1) <= 7).
+  { apply Z.abs_le. split; lia. }
+  assert (Hf: Z.abs (fileZ p2 - fileZ p1) <= 7).
+  { apply Z.abs_le. split; lia. }
+  apply Z.max_lub; assumption.
+Qed.
+
+Close Scope Z_scope.
+
 (** * Board Manipulation *)
 
 Definition promote_baidaq (b: Board) (p: Position) (c: Color) : Board :=
@@ -2980,6 +3016,26 @@ Definition on_same_line (p1 p2: Position) : bool :=
 Definition line_blocked (b: Board) (from to: Position) : bool :=
   negb (path_clear_between b from to).
 
+Open Scope Z_scope.
+
+Theorem path_fuel_7_sufficient : 
+  forall from to : Position,
+  chebyshev_distance from to <= 7.
+Proof.
+  intros from to.
+  apply chebyshev_max_distance.
+Qed.
+
+Theorem validate_slide_7_sufficient : forall from to directions,
+  validate_slide_move from to directions = true ->
+  chebyshev_distance from to <= 7.
+Proof.
+  intros from to directions H.
+  apply chebyshev_max_distance.
+Qed.
+
+Close Scope Z_scope.
+
 (** * Movement Validation Examples *)
 
 Example shah_can_move_diagonal : 
@@ -3593,6 +3649,17 @@ Definition rukh_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
 (** Step 6: Rukh move implementation using witness function *)
 
 Definition rukh_max_distance : nat := 7.
+
+Theorem rukh_max_distance_justified : 
+  forall from to : Position,
+  on_same_rank from to = true \/ on_same_file from to = true ->
+  chebyshev_distance from to <= Z.of_nat rukh_max_distance.
+Proof.
+  intros from to Hline.
+  unfold rukh_max_distance.
+  simpl.
+  apply chebyshev_max_distance.
+Qed.
 
 Definition rukh_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
   existsb (fun dir =>
@@ -4428,4 +4495,3 @@ Proof.
 Qed.
 
 Close Scope Z_scope.
- 
