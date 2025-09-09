@@ -4616,4 +4616,205 @@ Qed.
 Close Scope Z_scope.
 
 (** * End of Section 8: Unified Movement *)
- 
+
+(* ========================================================================= *)
+(* SECTION 9: ATTACK AND THREAT                                             *)
+(* ========================================================================= *)
+
+Open Scope Z_scope.
+
+(** * 9.1 Basic Attack Detection *)
+
+(** Check if a piece at 'from' position can attack 'to' position *)
+Definition attacks (b: Board) (from to: Position) : bool :=
+  match b[from] with
+  | None => false
+  | Some pc =>
+      let c := piece_color pc in
+      match piece_type pc with
+      | Shah => shah_move_impl b c from to
+      | Ferz => ferz_move_impl b c from to  
+      | Alfil => alfil_move_impl b c from to
+      | Faras => faras_move_impl b c from to
+      | Rukh => rukh_move_impl b c from to
+      | Baidaq => 
+          (* Baidaq only attacks diagonally, not forward *)
+          let capture_dirs := baidaq_capture_vectors c in
+          existsb (fun dir =>
+            match offset from (fst dir) (snd dir) with
+            | Some p => position_beq p to
+            | None => false
+            end) capture_dirs
+      end
+  end.
+
+(** Example: White Ferz can attack diagonally *)
+Example ferz_attacks_diagonal :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileE) then Some white_ferz
+    else None in
+  attacks b (mkPosition rank4 fileE) (mkPosition rank5 fileF) = true.
+Proof.
+  simpl. reflexivity.
+Qed.
+
+(** * 9.2 Position Under Attack Detection *)
+
+(** Check if a position is attacked by any piece of the given color *)
+Definition is_attacked (b: Board) (pos: Position) (by_color: Color) : bool :=
+  existsb (fun from => 
+    match b[from] with
+    | None => false
+    | Some pc => 
+        andb (Color_beq (piece_color pc) by_color)
+             (attacks b from pos)
+    end) enum_position.
+
+(** Example: Position attacked by white rukh *)
+Example position_attacked_by_rukh :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else None in
+  is_attacked b (mkPosition rank1 fileH) White = true.
+Proof.
+  reflexivity.
+Qed.
+
+(** * 9.3 Check Detection *)
+
+(** Check if a color's Shah is under attack *)
+Definition in_check (b: Board) (c: Color) : bool :=
+  match find_shah b c with
+  | None => false  (* No Shah found - shouldn't happen in well-formed board *)
+  | Some shah_pos => is_attacked b shah_pos (opposite_color c)
+  end.
+
+(** Example: White Shah in check from Black Rukh *)
+Example shah_in_check_from_rukh :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
+    else None in
+  in_check b White = true.
+Proof.
+  reflexivity.
+Qed.
+
+(** * 9.4 Validation Examples *)
+
+(** Simpler validation: if find_shah succeeds, in_check correctly detects attacks *)
+Example check_detection_simple : forall b c pos,
+  find_shah b c = Some pos ->
+  in_check b c = true <-> is_attacked b pos (opposite_color c) = true.
+Proof.
+  intros b c pos Hfind.
+  unfold in_check.
+  rewrite Hfind.
+  split; intro; assumption.
+Qed.
+
+(** Example: Baidaq only attacks diagonally, not forward *)
+Example baidaq_attack_diagonal_only :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank2 fileE) then Some white_baidaq
+    else None in
+  (attacks b (mkPosition rank2 fileE) (mkPosition rank3 fileE) = false) /\
+  (attacks b (mkPosition rank2 fileE) (mkPosition rank3 fileF) = true).
+Proof.
+  split; reflexivity.
+Qed.
+
+(** Example: Shah cannot be in check from friendly pieces *)
+Example no_check_from_friendly :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank1 fileD) then Some white_rukh
+    else None in
+  in_check b White = false.
+Proof.
+  reflexivity.
+Qed.
+
+(** * Advanced Tactical Examples *)
+
+(** 
+   A complex position demonstrating interaction between movement and threats:
+   - White Shah on e1 
+   - White Ferz on e2 (pinned by black Rukh on e8)
+   - White Alfil on c1 (can only reach light squares)
+   - Black Rukh on e8 (pinning the Ferz)
+   - Black Faras on d3 (attacking multiple squares)
+   - Black Alfil on g3 (controlling dark squares)
+   
+   This demonstrates:
+   1. The Ferz can physically move but shouldn't (pinned)
+   2. The Alfil cannot help defend certain squares (color binding)
+   3. The Faras creates a fork threat
+   4. Movement validation vs actual legality distinction
+*)
+Example section9_pin_and_alfil_color_binding :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank2 fileE) then Some white_ferz
+    else if position_beq pos (mkPosition rank1 fileC) then Some white_alfil
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
+    else if position_beq pos (mkPosition rank3 fileD) then Some black_faras
+    else if position_beq pos (mkPosition rank3 fileG) then Some black_alfil
+    else None in
+  (* Movement validation says Ferz CAN move *)
+  (can_move_piece b white_ferz (mkPosition rank2 fileE) (mkPosition rank3 fileF) = true) /\
+  (* But moving would expose Shah to check from Rukh *)
+  (let b_after_ferz_move := 
+     fun pos =>
+       if position_beq pos (mkPosition rank2 fileE) then None
+       else if position_beq pos (mkPosition rank3 fileF) then Some white_ferz
+       else b pos in
+   in_check b_after_ferz_move White = true) /\
+  (* White Alfil CAN reach e3 (both are light squares) - shows color binding *)
+  (attacks b (mkPosition rank1 fileC) (mkPosition rank3 fileE) = true) /\
+  (* But White Alfil cannot reach d2 (different color square) *)
+  (attacks b (mkPosition rank1 fileC) (mkPosition rank2 fileD) = false) /\
+  (* Black Faras attacks both c1 and e1 (fork) *)
+  (attacks b (mkPosition rank3 fileD) (mkPosition rank1 fileC) = true) /\
+  (attacks b (mkPosition rank3 fileD) (mkPosition rank1 fileE) = true) /\
+  (* Black Alfil on g3 can leap to e1 *)
+  (attacks b (mkPosition rank3 fileG) (mkPosition rank1 fileE) = true) /\
+  (* White IS in check from Black Alfil (g3 to e1 is exactly 2 diagonal) *)
+  (in_check b White = true) /\
+  (* But Black threatens multiple pieces *)
+  (is_attacked b (mkPosition rank1 fileC) Black = true).
+Proof.
+  repeat split; reflexivity.
+Qed.
+
+(** 
+   Double check scenario: Moving the pinned piece creates discovered check
+   while the original attacker still gives check
+*)
+Example section9_double_check_scenario :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank2 fileE) then Some white_ferz
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
+    else if position_beq pos (mkPosition rank3 fileG) then Some black_alfil
+    else None in
+  let b_after_ferz_moves := 
+    fun pos =>
+      if position_beq pos (mkPosition rank2 fileE) then None
+      else if position_beq pos (mkPosition rank3 fileD) then Some white_ferz
+      else b pos in
+  (* Original position: Shah in check from Alfil only *)
+  (in_check b White = true) /\
+  (* After Ferz moves: Shah would be in check from BOTH Rukh and Alfil *)
+  (attacks b_after_ferz_moves (mkPosition rank8 fileE) (mkPosition rank1 fileE) = true) /\
+  (attacks b_after_ferz_moves (mkPosition rank3 fileG) (mkPosition rank1 fileE) = true) /\
+  (* This is a double check situation - both pieces attack the Shah *)
+  (is_attacked b_after_ferz_moves (mkPosition rank1 fileE) Black = true).
+Proof.
+  repeat split; reflexivity.
+Qed.
+
+(** * End of Section 9: Attack and Threat *)
+
+Close Scope Z_scope.
+  
