@@ -4873,27 +4873,45 @@ Proof.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|discriminate].
   destruct (piece_type pc) eqn:Htype.
   - (* Shah *)
-    apply attacks_shah_sound with (b := b) (from := from) (to := to).
+    generalize (attacks_shah_sound b from to).
+    rewrite Hbfrom. 
+    intro Hlemma.
+    apply Hlemma.
     + exact Htype.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
   - (* Ferz *)
-    apply attacks_ferz_sound with (b := b) (from := from) (to := to).
+    generalize (attacks_ferz_sound b from to).
+    rewrite Hbfrom.
+    intro Hlemma.
+    apply Hlemma.
     + exact Htype.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
   - (* Alfil *)
-    apply attacks_alfil_sound with (b := b) (from := from) (to := to).
+    generalize (attacks_alfil_sound b from to).
+    rewrite Hbfrom.
+    intro Hlemma.
+    apply Hlemma.
     + exact Htype.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
   - (* Faras *)
-    apply attacks_faras_sound with (b := b) (from := from) (to := to).
+    generalize (attacks_faras_sound b from to).
+    rewrite Hbfrom.
+    intro Hlemma.
+    apply Hlemma.
     + exact Htype.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
   - (* Rukh *)
-    apply attacks_rukh_sound with (b := b) (from := from) (to := to).
+    generalize (attacks_rukh_sound b from to).
+    rewrite Hbfrom.
+    intro Hlemma.
+    apply Hlemma.
     + exact Htype.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
   - (* Baidaq *)
-    apply attacks_baidaq_sound with (b := b) (from := from) (to := to).
+    generalize (attacks_baidaq_sound b from to).
+    rewrite Hbfrom.
+    intro Hlemma.
+    apply Hlemma.
     + exact Htype.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
 Qed.
