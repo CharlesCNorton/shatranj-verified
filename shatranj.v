@@ -3704,6 +3704,51 @@ Proof.
       apply offset_compose with p; assumption.
 Qed.
 
+(** Helper: rukh_find_path_distance ensures path is clear *)
+Lemma rukh_find_path_distance_path_clear : forall b from dr df to n n',
+  rukh_find_path_distance b from dr df to n = Some n' ->
+  forall k, (0 < k < n')%nat ->
+  exists p, offset from (Z.of_nat k * dr) (Z.of_nat k * df) = Some p /\
+            empty b p = true.
+Proof.
+  intros b from dr df to n n'.
+  revert from n'.
+  induction n; intros from n' H.
+  - simpl in H. discriminate.
+  - simpl in H.
+    destruct (offset from dr df) eqn:Hoff; [|discriminate].
+    destruct (position_beq p to) eqn:Hbeq.
+    + (* Found target at distance 1 *)
+      injection H; intro; subst n'.
+      intros k Hk.
+      (* k < 1, but k > 0, so contradiction *)
+      lia.
+    + (* Need to check further *)
+      destruct (empty b p) eqn:Hemp; [|discriminate].
+      destruct (rukh_find_path_distance b p dr df to n) eqn:Hrec; [|discriminate].
+      injection H; intro; subst n'.
+      intros k Hk.
+      destruct (Nat.eq_dec k 1).
+      * (* k = 1, this is the first step *)
+        subst k.
+        exists p.
+        split.
+        -- change (Z.of_nat 1 * dr) with (1 * dr).
+           change (Z.of_nat 1 * df) with (1 * df).
+           rewrite Z.mul_1_l, Z.mul_1_l.
+           exact Hoff.
+        -- exact Hemp.
+      * (* k > 1, use induction hypothesis *)
+        assert (0 < k - 1 < n0)%nat by lia.
+        destruct (IHn p n0 Hrec (k - 1)%nat H0) as [q [Hoffq Hempq]].
+        exists q.
+        split.
+        -- replace (Z.of_nat k * dr) with (dr + Z.of_nat (k - 1) * dr) by lia.
+           replace (Z.of_nat k * df) with (df + Z.of_nat (k - 1) * df) by lia.
+           apply offset_compose with p; assumption.
+        -- exact Hempq.
+Qed.
+
 Lemma rukh_move_impl_exists_offset : forall b c from to,
   rukh_move_impl b c from to = true ->
   exists dr df, offset from dr df = Some to.
@@ -4648,6 +4693,211 @@ Definition attacks (b: Board) (from to: Position) : bool :=
       end
   end.
 
+(** Formal specification for attacks *)
+Definition attacks_spec (b: Board) (from to: Position) : Prop :=
+  match b[from] with
+  | None => False
+  | Some pc =>
+      let c := piece_color pc in
+      match piece_type pc with
+      | Shah => shah_move_spec b c from to
+      | Ferz => ferz_move_spec b c from to
+      | Alfil => alfil_move_spec b c from to
+      | Faras => faras_move_spec b c from to
+      | Rukh => rukh_move_spec b c from to
+      | Baidaq => 
+          (* Baidaq attacks only diagonally *)
+          exists dr df,
+            In (dr, df) (baidaq_capture_vectors c) /\
+            offset from dr df = Some to
+      end
+  end.
+
+(** Soundness for Baidaq attacks only *)
+Lemma attacks_baidaq_sound : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Baidaq
+  | None => False
+  end ->
+  attacks b from to = true ->
+  match b[from] with
+  | Some pc => 
+      exists dr df,
+        In (dr, df) (baidaq_capture_vectors (piece_color pc)) /\
+        offset from dr df = Some to
+  | None => False
+  end.
+Proof.
+  intros b from to Hpc H.
+  unfold attacks in H.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct (piece_type pc) eqn:Htype; try discriminate.
+  apply existsb_exists in H.
+  destruct H as [[dr df] [Hin Hcheck]].
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p.
+  exists dr, df.
+  split; [exact Hin|exact Hoff].
+Qed.
+
+(** Soundness for Shah attacks *)
+Lemma attacks_shah_sound : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Shah
+  | None => False
+  end ->
+  attacks b from to = true ->
+  match b[from] with
+  | Some pc => shah_move_spec b (piece_color pc) from to
+  | None => False
+  end.
+Proof.
+  intros b from to Hpc H.
+  unfold attacks in H.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct (piece_type pc) eqn:Htype; try discriminate.
+  apply shah_move_sound. exact H.
+Qed.
+
+(** Soundness for Ferz attacks *)
+Lemma attacks_ferz_sound : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Ferz
+  | None => False
+  end ->
+  attacks b from to = true ->
+  match b[from] with
+  | Some pc => ferz_move_spec b (piece_color pc) from to
+  | None => False
+  end.
+Proof.
+  intros b from to Hpc H.
+  unfold attacks in H.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct (piece_type pc) eqn:Htype; try discriminate.
+  apply ferz_move_sound. exact H.
+Qed.
+
+(** Soundness for Alfil attacks *)
+Lemma attacks_alfil_sound : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Alfil
+  | None => False
+  end ->
+  attacks b from to = true ->
+  match b[from] with
+  | Some pc => alfil_move_spec b (piece_color pc) from to
+  | None => False
+  end.
+Proof.
+  intros b from to Hpc H.
+  unfold attacks in H.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct (piece_type pc) eqn:Htype; try discriminate.
+  apply alfil_move_sound. exact H.
+Qed.
+
+(** Soundness for Faras attacks *)
+Lemma attacks_faras_sound : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Faras
+  | None => False
+  end ->
+  attacks b from to = true ->
+  match b[from] with
+  | Some pc => faras_move_spec b (piece_color pc) from to
+  | None => False
+  end.
+Proof.
+  intros b from to Hpc H.
+  unfold attacks in H.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct (piece_type pc) eqn:Htype; try discriminate.
+  apply faras_move_sound. exact H.
+Qed.
+
+(** Soundness for Rukh attacks *)
+Lemma attacks_rukh_sound : forall b from to,
+  match b[from] with
+  | Some pc => piece_type pc = Rukh
+  | None => False
+  end ->
+  attacks b from to = true ->
+  match b[from] with
+  | Some pc => rukh_move_spec b (piece_color pc) from to
+  | None => False
+  end.
+Proof.
+  intros b from to Hpc H.
+  unfold attacks in H.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
+  destruct (piece_type pc) eqn:Htype; try discriminate.
+  unfold rukh_move_spec.
+  unfold rukh_move_impl in H.
+  apply existsb_exists in H.
+  destruct H as [dir [Hin Hmatch]].
+  destruct (rukh_find_path_distance b from (fst dir) (snd dir) to rukh_max_distance) eqn:Hfind; [|discriminate].
+  generalize Hfind. intros Hfind'.
+  apply rukh_find_path_distance_sound in Hfind'.
+  destruct Hfind' as [Hgt [Hle Hoff]].
+  exists (fst dir), (snd dir), n.
+  split.
+  - destruct dir. simpl. exact Hin.
+  - split; [exact Hgt|].
+    split; [exact Hoff|].
+    split.
+    + intros k Hk.
+      apply rukh_find_path_distance_path_clear with (n := rukh_max_distance) (n' := n) (to := to).
+      * exact Hfind.
+      * exact Hk.
+    + destruct (b[to]) eqn:Hbto.
+      * unfold occupied_by in Hmatch.
+        rewrite Hbto in Hmatch.
+        simpl in Hmatch.
+        apply negb_true_iff in Hmatch.
+        apply Color_beq_neq. exact Hmatch.
+      * trivial.
+Qed.
+
+(** Combined soundness lemma using all piece-specific lemmas *)
+Lemma attacks_sound : forall b from to,
+  attacks b from to = true ->
+  attacks_spec b from to.
+Proof.
+  intros b from to H.
+  unfold attacks_spec.
+  unfold attacks in H.
+  destruct (b[from]) as [pc|] eqn:Hbfrom; [|discriminate].
+  destruct (piece_type pc) eqn:Htype.
+  - (* Shah *)
+    apply attacks_shah_sound with (b := b) (from := from) (to := to).
+    + exact Htype.
+    + unfold attacks. rewrite Hbfrom, Htype. exact H.
+  - (* Ferz *)
+    apply attacks_ferz_sound with (b := b) (from := from) (to := to).
+    + exact Htype.
+    + unfold attacks. rewrite Hbfrom, Htype. exact H.
+  - (* Alfil *)
+    apply attacks_alfil_sound with (b := b) (from := from) (to := to).
+    + exact Htype.
+    + unfold attacks. rewrite Hbfrom, Htype. exact H.
+  - (* Faras *)
+    apply attacks_faras_sound with (b := b) (from := from) (to := to).
+    + exact Htype.
+    + unfold attacks. rewrite Hbfrom, Htype. exact H.
+  - (* Rukh *)
+    apply attacks_rukh_sound with (b := b) (from := from) (to := to).
+    + exact Htype.
+    + unfold attacks. rewrite Hbfrom, Htype. exact H.
+  - (* Baidaq *)
+    apply attacks_baidaq_sound with (b := b) (from := from) (to := to).
+    + exact Htype.
+    + unfold attacks. rewrite Hbfrom, Htype. exact H.
+Qed.
+
 (** Example: White Ferz can attack diagonally *)
 Example ferz_attacks_diagonal :
   let b := fun pos =>
@@ -4926,3 +5176,4 @@ Qed.
 (** * End of Section 9: Attack and Threat *)
 
 Close Scope Z_scope.
+  
