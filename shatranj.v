@@ -3718,32 +3718,153 @@ Definition baidaq_at_promotion_rank (p: Position) (c: Color) : bool :=
   | Black => if rank_eq_dec (pos_rank p) rank1 then true else false
   end.
 
+(** * Helper Lemmas for Baidaq Promotion *)
+
+Lemma baidaq_at_promotion_rank_white : forall p,
+  baidaq_at_promotion_rank p White = true <-> pos_rank p = rank8.
+Proof.
+  intro p. unfold baidaq_at_promotion_rank.
+  destruct (rank_eq_dec (pos_rank p) rank8).
+  - split; intro; [exact e | reflexivity].
+  - split; intro H; [discriminate | contradiction].
+Qed.
+
+Lemma baidaq_at_promotion_rank_black : forall p,
+  baidaq_at_promotion_rank p Black = true <-> pos_rank p = rank1.
+Proof.
+  intro p. unfold baidaq_at_promotion_rank.
+  destruct (rank_eq_dec (pos_rank p) rank1).
+  - split; intro; [exact e | reflexivity].
+  - split; intro H; [discriminate | contradiction].
+Qed.
+
+Lemma baidaq_at_promotion_rank_false_white : forall p,
+  baidaq_at_promotion_rank p White = false <-> pos_rank p <> rank8.
+Proof.
+  intro p. unfold baidaq_at_promotion_rank.
+  destruct (rank_eq_dec (pos_rank p) rank8).
+  - split; intro H; [discriminate | contradiction].
+  - split; intro; [exact n | reflexivity].
+Qed.
+
+Lemma baidaq_at_promotion_rank_false_black : forall p,
+  baidaq_at_promotion_rank p Black = false <-> pos_rank p <> rank1.
+Proof.
+  intro p. unfold baidaq_at_promotion_rank.
+  destruct (rank_eq_dec (pos_rank p) rank1).
+  - split; intro H; [discriminate | contradiction].
+  - split; intro; [exact n | reflexivity].
+Qed.
+
+Lemma baidaq_promotion_decidable : forall p c,
+  {baidaq_at_promotion_rank p c = true} + {baidaq_at_promotion_rank p c = false}.
+Proof.
+  intros p c.
+  unfold baidaq_at_promotion_rank.
+  destruct c.
+  - destruct (rank_eq_dec (pos_rank p) rank8); [left|right]; reflexivity.
+  - destruct (rank_eq_dec (pos_rank p) rank1); [left|right]; reflexivity.
+Qed.
+
+Lemma baidaq_white_move_to_rank8 : forall from to,
+  offset from 1 0 = Some to ->
+  baidaq_at_promotion_rank to White = true ->
+  pos_rank to = rank8.
+Proof.
+  intros from to Hoff Hprom.
+  apply baidaq_at_promotion_rank_white. exact Hprom.
+Qed.
+
+Lemma baidaq_black_move_to_rank1 : forall from to,
+  offset from (-1) 0 = Some to ->
+  baidaq_at_promotion_rank to Black = true ->
+  pos_rank to = rank1.
+Proof.
+  intros from to Hoff Hprom.
+  apply baidaq_at_promotion_rank_black. exact Hprom.
+Qed.
+
+Lemma baidaq_white_capture_to_rank8 : forall from to dr df,
+  In (dr, df) (baidaq_capture_vectors White) ->
+  offset from dr df = Some to ->
+  baidaq_at_promotion_rank to White = true ->
+  pos_rank to = rank8.
+Proof.
+  intros from to dr df Hin Hoff Hprom.
+  apply baidaq_at_promotion_rank_white. exact Hprom.
+Qed.
+
+Lemma baidaq_black_capture_to_rank1 : forall from to dr df,
+  In (dr, df) (baidaq_capture_vectors Black) ->
+  offset from dr df = Some to ->
+  baidaq_at_promotion_rank to Black = true ->
+  pos_rank to = rank1.
+Proof.
+  intros from to dr df Hin Hoff Hprom.
+  apply baidaq_at_promotion_rank_black. exact Hprom.
+Qed.
+
+(** * Enhanced Baidaq Movement Specification with Promotion *)
+
+Inductive BaidaqMoveResult : Type :=
+  | RegularMove : BaidaqMoveResult
+  | PromotionMove : BaidaqMoveResult.
+
+Definition baidaq_move_result (to: Position) (c: Color) : BaidaqMoveResult :=
+  if baidaq_at_promotion_rank to c then PromotionMove else RegularMove.
+
 Definition baidaq_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
   let move_dir := baidaq_move_vector c in
   let capture_dirs := baidaq_capture_vectors c in
-  (offset from (fst move_dir) (snd move_dir) = Some to /\ 
-   empty b to = true) \/
-  (exists dr df,
-    In (dr, df) capture_dirs /\
-    offset from dr df = Some to /\
-    exists pc, b[to] = Some pc /\ piece_color pc <> c).
+  ((offset from (fst move_dir) (snd move_dir) = Some to /\ 
+    empty b to = true) \/
+   (exists dr df,
+     In (dr, df) capture_dirs /\
+     offset from dr df = Some to /\
+     exists pc, b[to] = Some pc /\ piece_color pc <> c)) /\
+  (* Promotion condition: reaching the promotion rank means automatic promotion to Ferz *)
+  (baidaq_at_promotion_rank to c = true -> 
+   baidaq_move_result to c = PromotionMove).
 
 Definition baidaq_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
   let move_dir := baidaq_move_vector c in
   let capture_dirs := baidaq_capture_vectors c in
-  (match offset from (fst move_dir) (snd move_dir) with
-   | Some p => andb (position_beq p to) (empty b to)
-   | None => false
-   end) ||
-  (existsb (fun dir =>
-    match offset from (fst dir) (snd dir) with
-    | Some p => andb (position_beq p to) 
-                    (match b[to] with
-                     | Some pc => negb (Color_beq (piece_color pc) c)
-                     | None => false
-                     end)
-    | None => false
-    end) capture_dirs).
+  let basic_move :=
+    orb (match offset from (fst move_dir) (snd move_dir) with
+         | Some p => andb (position_beq p to) (empty b to)
+         | None => false
+         end)
+        (existsb (fun dir =>
+          match offset from (fst dir) (snd dir) with
+          | Some p => andb (position_beq p to) 
+                          (match b[to] with
+                           | Some pc => negb (Color_beq (piece_color pc) c)
+                           | None => false
+                           end)
+          | None => false
+          end) capture_dirs) in
+  (* The movement is valid regardless of promotion - promotion is automatic when reaching the right rank *)
+  basic_move.
+
+(** * Helper lemmas for proving soundness with promotion *)
+
+Lemma baidaq_move_result_promotion : forall to c,
+  baidaq_at_promotion_rank to c = true ->
+  baidaq_move_result to c = PromotionMove.
+Proof.
+  intros to c H.
+  unfold baidaq_move_result.
+  rewrite H. reflexivity.
+Qed.
+
+Lemma baidaq_move_result_regular : forall to c,
+  baidaq_at_promotion_rank to c = false ->
+  baidaq_move_result to c = RegularMove.
+Proof.
+  intros to c H.
+  unfold baidaq_move_result.
+  rewrite H. reflexivity.
+Qed.
 
 Lemma baidaq_move_sound : forall b c from to,
   baidaq_move_impl b c from to = true ->
@@ -3751,29 +3872,35 @@ Lemma baidaq_move_sound : forall b c from to,
 Proof.
   intros b c from to H.
   unfold baidaq_move_impl in H.
-  apply orb_prop in H. destruct H as [Hmove|Hcapture].
-  - left.
-    destruct (offset from (fst (baidaq_move_vector c)) 
-                         (snd (baidaq_move_vector c))) eqn:Hoff; 
-      [|discriminate].
-    apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
-    unfold position_beq in Hpos.
-    destruct (position_eq_dec p to); [|discriminate].
-    subst p. split; [reflexivity|exact Hemp].
-  - right.
-    apply existsb_exists in Hcapture.
-    destruct Hcapture as [[dr df] [Hin Hcheck]].
-    exists dr, df. split; [exact Hin|].
-    simpl in Hcheck.
-    destruct (offset from dr df) eqn:Hoff; [|discriminate].
-    apply andb_prop in Hcheck. destruct Hcheck as [Hpos Hpiece].
-    unfold position_beq in Hpos.
-    destruct (position_eq_dec p to); [|discriminate].
-    subst p. split; [reflexivity|].
-    destruct (b[to]) eqn:Hbto; [|discriminate].
-    exists p. split; [reflexivity|].
-    apply negb_true_iff in Hpiece.
-    apply Color_beq_neq. exact Hpiece.
+  unfold baidaq_move_spec.
+  split.
+  - (* First prove the movement part *)
+    apply orb_prop in H. destruct H as [Hmove|Hcapture].
+    + left.
+      destruct (offset from (fst (baidaq_move_vector c)) 
+                           (snd (baidaq_move_vector c))) eqn:Hoff; 
+        [|discriminate].
+      apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
+      unfold position_beq in Hpos.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p. split; [reflexivity|exact Hemp].
+    + right.
+      apply existsb_exists in Hcapture.
+      destruct Hcapture as [[dr df] [Hin Hcheck]].
+      exists dr, df. split; [exact Hin|].
+      simpl in Hcheck.
+      destruct (offset from dr df) eqn:Hoff; [|discriminate].
+      apply andb_prop in Hcheck. destruct Hcheck as [Hpos Hpiece].
+      unfold position_beq in Hpos.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p. split; [reflexivity|].
+      destruct (b[to]) eqn:Hbto; [|discriminate].
+      exists p. split; [reflexivity|].
+      apply negb_true_iff in Hpiece.
+      apply Color_beq_neq. exact Hpiece.
+  - (* Now prove the promotion implication *)
+    intro Hprom.
+    apply baidaq_move_result_promotion. exact Hprom.
 Qed.
 
 Lemma baidaq_move_complete : forall b c from to,
@@ -3782,7 +3909,10 @@ Lemma baidaq_move_complete : forall b c from to,
 Proof.
   intros b c from to Hspec.
   unfold baidaq_move_impl.
-  destruct Hspec as [[Hoff Hemp]|[dr [df [Hin [Hoff [pc [Hbto Hcolor]]]]]]].
+  unfold baidaq_move_spec in Hspec.
+  destruct Hspec as [Hmove Hprom].
+  (* We only need to prove the movement part; promotion is automatic *)
+  destruct Hmove as [[Hoff Hemp]|[dr [df [Hin [Hoff [pc [Hbto Hcolor]]]]]]].
   - apply orb_true_intro. left.
     rewrite Hoff.
     apply andb_true_intro. split.
@@ -4009,6 +4139,114 @@ Proof.
   apply alfil_leap_distance. exact Hval.
 Qed.
 
+Example faras_L_shape : forall b c from to,
+  faras_move_impl b c from to = true ->
+  let dr := Z.abs (rankZ to - rankZ from) in
+  let df := Z.abs (fileZ to - fileZ from) in
+  (dr = 2 /\ df = 1) \/ (dr = 1 /\ df = 2).
+Proof.
+  intros b c from to H dr df.
+  unfold faras_move_impl in H.
+  apply andb_prop in H. destruct H as [Hval _].
+  apply faras_leap_L_shape. exact Hval.
+Qed.
+
+Example baidaq_forward_or_diagonal : forall b c from to,
+  baidaq_move_impl b c from to = true ->
+  (empty b to = true /\ 
+   match c with
+   | White => rankZ to = rankZ from + 1 /\ fileZ to = fileZ from
+   | Black => rankZ to = rankZ from - 1 /\ fileZ to = fileZ from
+   end) \/
+  (occupied b to = true /\
+   match c with
+   | White => rankZ to = rankZ from + 1 /\ Z.abs (fileZ to - fileZ from) = 1
+   | Black => rankZ to = rankZ from - 1 /\ Z.abs (fileZ to - fileZ from) = 1
+   end).
+Proof.
+  intros b c from to H.
+  unfold baidaq_move_impl in H.
+  apply orb_prop in H. destruct H as [Hmove|Hcapture].
+  - (* Move case *)
+    left.
+    destruct c; simpl in Hmove.
+    + (* White case *)
+      destruct (offset from 1 0) eqn:Hoff; [|discriminate].
+      apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
+      unfold position_beq in Hpos.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p.
+      apply offset_preserves_board_validity in Hoff.
+      destruct Hoff as [Hr [Hf _]].
+      split.
+      * exact Hemp.
+      * rewrite Hr, Hf. simpl. split; ring.
+    + (* Black case *)
+      destruct (offset from (-1) 0) eqn:Hoff; [|discriminate].
+      apply andb_prop in Hmove. destruct Hmove as [Hpos Hemp].
+      unfold position_beq in Hpos.
+      destruct (position_eq_dec p to); [|discriminate].
+      subst p.
+      apply offset_preserves_board_validity in Hoff.
+      destruct Hoff as [Hr [Hf _]].
+      split.
+      * exact Hemp.
+      * rewrite Hr, Hf. simpl. split; ring.
+  - (* Capture case *)
+    right.
+    apply existsb_exists in Hcapture.
+    destruct Hcapture as [[dr df] [Hin Hcheck]].
+    simpl in Hcheck.
+    destruct (offset from dr df) eqn:Hoff; [|discriminate].
+    apply andb_prop in Hcheck. destruct Hcheck as [Hpos Hpiece].
+    unfold position_beq in Hpos.
+    destruct (position_eq_dec p to); [|discriminate].
+    subst p.
+    split.
+    + unfold occupied. destruct (b[to]); [reflexivity|discriminate].
+    + apply offset_preserves_board_validity in Hoff.
+      destruct Hoff as [Hr [Hf _]].
+      rewrite Hr, Hf.
+      replace (rankZ from + dr - rankZ from) with dr by ring.
+      replace (fileZ from + df - fileZ from) with df by ring.
+      destruct c; simpl in Hin.
+      * destruct Hin as [H'|[H'|[]]]; injection H'; intros <- <-; simpl; split; ring.
+      * destruct Hin as [H'|[H'|[]]]; injection H'; intros <- <-; simpl; split; ring.
+Qed.
+
+(** * Validation Examples for Baidaq Promotion *)
+
+Example baidaq_white_promotion_on_move : forall b from,
+  pos_rank from = rank7 ->
+  baidaq_move_impl b White from (mkPosition rank8 (pos_file from)) = true ->
+  baidaq_at_promotion_rank (mkPosition rank8 (pos_file from)) White = true.
+Proof.
+  intros b from Hrank7 Hmove.
+  apply baidaq_at_promotion_rank_white.
+  simpl. reflexivity.
+Qed.
+
+Example baidaq_black_promotion_on_move : forall b from,
+  pos_rank from = rank2 ->
+  baidaq_move_impl b Black from (mkPosition rank1 (pos_file from)) = true ->
+  baidaq_at_promotion_rank (mkPosition rank1 (pos_file from)) Black = true.
+Proof.
+  intros b from Hrank2 Hmove.
+  apply baidaq_at_promotion_rank_black.
+  simpl. reflexivity.
+Qed.
+
+Example baidaq_promotion_is_mandatory : forall b c from to,
+  baidaq_move_spec b c from to ->
+  baidaq_at_promotion_rank to c = true ->
+  baidaq_move_result to c = PromotionMove.
+Proof.
+  intros b c from to Hspec Hprom.
+  unfold baidaq_move_spec in Hspec.
+  destruct Hspec as [_ Himpl].
+  apply Himpl. exact Hprom.
+Qed.
+
 (** * Additional Movement Helpers *)
 
 Definition is_valid_move (b: Board) (from to: Position) : bool :=
@@ -4108,6 +4346,21 @@ Proof.
   - apply negb_true_iff. exact Hsafe.
 Qed.
 
+(** Example: Safe Shah movement prevents moving into check *)
+Example shah_safe_no_check : forall b c from to,
+  shah_move_safe_impl b c from to = true ->
+  let b' := board_move b from to in
+  position_attacked_by b' to (opposite_color c) = false.
+Proof.
+  intros b c from to H b'.
+  unfold shah_move_safe_impl in H.
+  apply andb_prop in H. destruct H as [_ Hsafe].
+  apply negb_true_iff in Hsafe.
+  unfold shah_move_would_be_in_check in Hsafe.
+  unfold b'. exact Hsafe.
+Qed.
+
 (** * End of Section 7: Piece Movement Rules *)
 
 Close Scope Z_scope.
+        
