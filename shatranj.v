@@ -6945,4 +6945,133 @@ Proof.
   reflexivity.
 Qed.
 
+(** * 12.11 Bare King Detection *)
+
+(** Check if a player has achieved bare king (opponent has only Shah left) *)
+Definition bare_king_check (st: GameState) : option Color :=
+  let white_pieces := count_pieces (board st) White in
+  let black_pieces := count_pieces (board st) Black in
+  if Nat.eqb white_pieces 1 then Some Black  (* Black wins - White is bare *)
+  else if Nat.eqb black_pieces 1 then Some White  (* White wins - Black is bare *)
+  else None.
+
+(** Example: Classic endgame where Black has bared White's king *)
+Example bare_king_endgame :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank6 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank6 fileA) then Some black_rukh
+    else if position_beq pos (mkPosition rank3 fileH) then Some black_faras
+    else None in
+  let st := mkGameState b Black 45 80 false in
+  (* White has only Shah, Black has Shah + Rukh + Faras *)
+  (count_pieces b White = 1) /\
+  (count_pieces b Black = 3) /\
+  (bare_king_check st = Some Black).  (* Black has achieved bare king *)
+Proof.
+  split; [|split].
+  - (* White piece count *)
+    unfold count_pieces. simpl. reflexivity.
+  - (* Black piece count *)
+    unfold count_pieces. simpl. reflexivity.
+  - (* bare_king_check result *)
+    unfold bare_king_check. simpl. reflexivity.
+Qed.
+
+(** Check if the current player can immediately counter-bare their opponent *)
+Definition can_counter_bare (st: GameState) : bool :=
+  (* Can only counter-bare if we're currently bare *)
+  match bare_king_check st with
+  | Some winner =>
+      if Color_beq winner (turn st) then false  (* We already won *)
+      else
+        (* Check if any of our moves would bare opponent *)
+        existsb (fun move_pair =>
+          let from := fst move_pair in
+          let to := snd move_pair in
+          match (board st)[from] with
+          | None => false
+          | Some pc =>
+              if Color_beq (piece_color pc) (turn st) then
+                if can_move_piece (board st) pc from to then
+                  (* Check if this capture would bare opponent *)
+                  let b_after := board_move (board st) from to in
+                  Nat.eqb (count_pieces b_after (opposite_color (turn st))) 1
+                else false
+              else false
+          end
+        ) (list_prod enum_position enum_position)
+  | None => false  (* Not in bare king situation *)
+  end.
+
+(** Example: Counter-bare situation - White is bare but can capture Black's last piece *)
+Example counter_bare_possible :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank5 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank5 fileF) then Some black_ferz  (* Can be captured by White Shah *)
+    else None in
+  let st := mkGameState b White 0 50 false in
+  (* White is bare (only Shah) but can counter-bare by capturing Black's Ferz *)
+  (bare_king_check st = Some Black) /\  (* Black has achieved bare king *)
+  (can_counter_bare st = true).  (* But White can counter-bare immediately *)
+Proof.
+  split.
+  - (* bare_king_check shows Black wins *)
+    unfold bare_king_check. simpl. reflexivity.
+  - (* can_counter_bare is true *)
+    unfold can_counter_bare. simpl.
+    unfold bare_king_check. simpl.
+    unfold Color_beq. simpl.
+    unfold existsb. simpl.
+    reflexivity.
+Qed.
+
+(** * 12.12 Bilateral Soundness and Completeness *)
+
+(** Helper: legal_move_impl checks all conditions of legal_move_spec for Normal moves *)
+Lemma legal_move_impl_normal_checks_all : forall st from to,
+  legal_move_impl st (Normal from to) = true ->
+  match (board st)[from] with
+  | None => False
+  | Some pc =>
+      piece_color pc = turn st /\
+      can_move_piece (board st) pc from to = true /\
+      match (board st)[to] with
+      | None => True
+      | Some target => piece_color target <> turn st
+      end /\
+      let b_after := board_move (board st) from to in
+      match find_shah b_after (turn st) with
+      | None => False
+      | Some shah_pos =>
+          position_under_attack_by b_after shah_pos (opposite_color (turn st)) = false
+      end
+  end.
+Proof.
+  intros st from to H.
+  unfold legal_move_impl in H.
+  destruct ((board st)[from]) eqn:Hpiece; [|discriminate].
+  rename p into pc.  (* Rename to avoid conflict with position variable in lemmas *)
+  apply andb_prop in H. destruct H as [Hcolor Hrest].
+  apply andb_prop in Hrest. destruct Hrest as [Hmove Hcheck].
+  split.
+  - apply Color_beq_eq. exact Hcolor.
+  - split.
+    + exact Hmove.
+    + split.
+      * destruct ((board st)[to]) eqn:Hdest.
+        -- (* We need: piece_color p0 <> turn st
+              We have: piece_color pc = turn st (from Hcolor)
+              no_friendly_fire gives us: piece_color p0 <> piece_color pc *)
+           pose proof (no_friendly_fire (board st) pc from to Hpiece Hmove p0 Hdest) as Hneq'.
+           assert (piece_color pc = turn st) as Heq.
+           { apply Color_beq_eq. exact Hcolor. }
+           rewrite <- Heq. exact Hneq'.
+        -- trivial.
+      * destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hshah.
+        -- apply negb_true_iff in Hcheck. exact Hcheck.
+        -- discriminate.
+Qed.
+
 (** * End of Section 12: Move Legality *)
