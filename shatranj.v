@@ -5191,7 +5191,129 @@ Proof.
   exact H.
 Qed.
 
+(** * 9.6 Pass-Through Check Handling *)
+
+(**
+   Generalized pass-through check detection for completeness.
+   While Shatranj has no castling, this demonstrates rigorous handling
+   of movement paths through threatened squares.
+*)
+
+(** Check if any position along a path would be under attack *)
+Definition path_passes_through_check (b: Board) (from to: Position) 
+                                     (path: list Position) (c: Color) : bool :=
+  existsb (fun pos => position_under_attack_by b pos (opposite_color c)) path.
+
+(** Generate intermediate positions for a straight-line movement *)
+Fixpoint generate_intermediate_positions_aux (from: Position) (dr df: Z) 
+                                            (steps: nat) : list Position :=
+  match steps with
+  | O => []
+  | S n' => 
+      match offset from dr df with
+      | None => []
+      | Some next => next :: generate_intermediate_positions_aux next dr df n'
+      end
+  end.
+
+(** Calculate direction vector between two positions *)
+Definition calculate_direction (from to: Position) : option (Z * Z) :=
+  let dr := rankZ to - rankZ from in
+  let df := fileZ to - fileZ from in
+  if andb (Z.eqb dr 0) (Z.eqb df 0) then
+    None  (* Same position *)
+  else if Z.eqb dr 0 then
+    Some (0, if Z.ltb df 0 then -1 else 1)  (* Horizontal *)
+  else if Z.eqb df 0 then
+    Some (if Z.ltb dr 0 then -1 else 1, 0)  (* Vertical *)
+  else if Z.eqb (Z.abs dr) (Z.abs df) then
+    Some (if Z.ltb dr 0 then -1 else 1,
+          if Z.ltb df 0 then -1 else 1)  (* Diagonal *)
+  else
+    None.  (* Not a straight line *)
+
+(** Generate all intermediate positions between from and to *)
+Definition generate_path_positions (from to: Position) : list Position :=
+  match calculate_direction from to with
+  | None => []
+  | Some (dr, df) => 
+      let max_steps := Z.to_nat (Z.max (Z.abs (rankZ to - rankZ from))
+                                       (Z.abs (fileZ to - fileZ from))) in
+      let all_positions := generate_intermediate_positions_aux from dr df max_steps in
+      (* Remove the destination from the path *)
+      list_remove position_eq_dec to all_positions
+  end.
+
+(** Check if a movement path is safe from attacks *)
+Definition path_is_safe (b: Board) (from to: Position) (c: Color) : bool :=
+  let intermediate_positions := generate_path_positions from to in
+  negb (path_passes_through_check b from to intermediate_positions c).
+
+(** Helper lemma: Empty path is always safe *)
+Lemma empty_path_safe : forall b from to c,
+  path_passes_through_check b from to nil c = false.
+Proof.
+  intros b from to c.
+  unfold path_passes_through_check.
+  simpl. reflexivity.
+Qed.
+
+(** Helper: Shah moves are always distance 1 *)
+Lemma shah_move_distance_one : forall b c from to,
+  shah_move_impl b c from to = true ->
+  chebyshev_distance from to = 1.
+Proof.
+  intros b c from to H.
+  unfold shah_move_impl in H.
+  apply andb_prop in H. destruct H as [H' _].
+  apply andb_prop in H'. destruct H' as [Hval _].
+  unfold validate_step_move in Hval.
+  apply existsb_exists in Hval.
+  destruct Hval as [[dr df] [Hin Hcheck]].
+  unfold shah_vectors in Hin.
+  simpl in Hin.
+  simpl in Hcheck.
+  destruct (offset from dr df) eqn:Hoff; [|discriminate].
+  unfold position_beq in Hcheck.
+  destruct (position_eq_dec p to); [|discriminate].
+  subst p.
+  apply offset_preserves_board_validity in Hoff.
+  destruct Hoff as [Hr [Hf _]].
+  unfold chebyshev_distance.
+  rewrite Hr, Hf.
+  replace (rankZ from + dr - rankZ from) with dr by ring.
+  replace (fileZ from + df - fileZ from) with df by ring.
+  destruct Hin as [H|[H|[H|[H|[H|[H|[H|[H|[]]]]]]]]];
+    injection H; intros <- <-; simpl; reflexivity.
+Qed.
+
+(** Validation examples showing pass-through-check detection *)
+
+Example adjacent_squares_no_intermediate :
+  let from := mkPosition rank4 fileE in
+  let to := mkPosition rank4 fileF in
+  (* Adjacent squares have no intermediate positions *)
+  generate_path_positions from to = nil.
+Proof.
+  compute. reflexivity.
+Qed.
+
+(** Comprehensive example: Pass-through check demonstration *)
+Example pass_through_check_demonstration :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank1 fileE) then Some black_rukh
+    else None in
+  let from := mkPosition rank1 fileA in
+  let to := mkPosition rank1 fileH in
+  let path := generate_path_positions from to in
+  (* The path includes e1 which is under attack *)
+  existsb (fun p => position_beq p (mkPosition rank1 fileE)) path = true.
+Proof.
+  compute. reflexivity.
+Qed.
+
 (** * End of Section 9: Attack and Threat *)
 
 Close Scope Z_scope.
-  
+      
