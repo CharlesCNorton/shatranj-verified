@@ -8795,4 +8795,39 @@ Proof.
   - trivial.
 Qed.
 
+(** Example: Unified theorem handles different move types correctly *)
+Example unified_theorem_handles_all_cases : 
+  (* The unified theorem correctly dispatches on move type *)
+  forall st m,
+  WellFormedState st = true ->
+  legal_move_impl st m = true ->
+  (* For Normal moves, need to verify it's not a mandatory promotion *)
+  (forall from to, m = Normal from to ->
+    forall pc, (board st)[from] = Some pc ->
+      piece_type pc = Baidaq ->
+      baidaq_at_promotion_rank to (piece_color pc) = false) ->
+  (* For Promotion moves, need to verify promotion is mandatory *)
+  (forall from to, m = Promotion from to ->
+    exists pc, (board st)[from] = Some pc /\
+      piece_type pc = Baidaq /\
+      baidaq_at_promotion_rank to (piece_color pc) = true) ->
+  (* Then the move is in the generated list (for board moves) *)
+  is_board_move m = true ->
+  In m (generate_moves_impl st).
+Proof.
+  intros st m Hwf Hlegal Hnormal Hpromo Hboard.
+  apply is_board_move_correct in Hboard.
+  destruct Hboard as [[from [to Heq]]|[from [to Heq]]]; subst m.
+  - (* Normal case *)
+    assert (H := gen_captures_all_legal st (Normal from to) Hwf Hlegal).
+    simpl in H.
+    apply H.
+    apply (Hnormal from to eq_refl).
+  - (* Promotion case *)
+    assert (H := gen_captures_all_legal st (Promotion from to) Hwf Hlegal).
+    simpl in H.
+    apply H.
+    apply (Hpromo from to eq_refl).
+Qed.
+
 (** * End of Section 14: Move Generation *)
