@@ -8903,4 +8903,51 @@ Proof.
 Qed.
 
 (** * End of Section 14: Move Generation *)
+
+(* ========================================================================= *)
+(* SECTION 15: GAME TREE PROPERTIES                                         *)
+(* ========================================================================= *)
+
+(** * 15.1 Reachability Definition *)
+
+(** A state st' is reachable from st if there exists a sequence of legal moves
+    transforming st into st' *)
+Inductive reachable : GameState -> GameState -> Prop :=
+  | reachable_refl : forall st, reachable st st
+  | reachable_step : forall st st' st'' m,
+      legal_move_impl st m = true ->
+      apply_move_impl st m = Some st' ->
+      reachable st' st'' ->
+      reachable st st''.
+
+(** Helper: One move creates reachability *)
+Lemma reachable_one_move : forall st st' m,
+  legal_move_impl st m = true ->
+  apply_move_impl st m = Some st' ->
+  reachable st st'.
+Proof.
+  intros st st' m Hlegal Happly.
+  apply (@reachable_step st st' st' m Hlegal Happly).
+  apply reachable_refl.
+Qed.
+
+(** * 15.2 Reachability Properties *)
+
+(** Transitivity of reachability *)
+Lemma reachable_trans : forall st st' st'',
+  reachable st st' ->
+  reachable st' st'' ->
+  reachable st st''.
+Proof.
+  intros st st' st'' H1 H2.
+  induction H1 as [st | st stmid stend m Hlegal Happly Hreach IH].
+  - (* refl case: st = st' *)
+    exact H2.
+  - (* step case: st -> stmid -> stend, and we need st -> st'' *)
+    apply (@reachable_step st stmid st'' m Hlegal Happly).
+    apply IH.
+    exact H2.
+Qed.
+
+(** * End of Section 15: Game Tree Pr operties *)
   
