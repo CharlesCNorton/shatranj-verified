@@ -9167,4 +9167,174 @@ Proof.
   compute. reflexivity.
 Qed.
 
+
+(** * 15.4 Well-Formedness Preservation *)
+
+(** Helper: occupied_by check prevents capturing same color *)
+Lemma occupied_by_prevents_same_color : forall b pos c pc,
+  negb (occupied_by b pos c) = true ->
+  b[pos] = Some pc ->
+  piece_color pc <> c.
+Proof.
+  intros b pos c pc Hocc Hpc.
+  unfold occupied_by in Hocc.
+  rewrite Hpc in Hocc.
+  simpl in Hocc.
+  apply negb_true_iff in Hocc.
+  apply Color_beq_neq. exact Hocc.
+Qed.
+
+(** Helper: Pieces are opposite colors *)
+Definition pieces_opposite_colors (pc1 pc2: Piece) : bool :=
+  negb (Color_beq (piece_color pc1) (piece_color pc2)).
+
+(** Helper: Opposite colors are not equal *)
+Lemma opposite_colors_neq : forall pc1 pc2,
+  pieces_opposite_colors pc1 pc2 = true ->
+  piece_color pc1 <> piece_color pc2.
+Proof.
+  intros pc1 pc2 H.
+  unfold pieces_opposite_colors in H.
+  apply negb_true_iff in H.
+  apply Color_beq_neq. exact H.
+Qed.
+
+(** Helper: shah_move_impl checks target is not friendly *)
+Lemma shah_move_checks_not_friendly : forall b c from to,
+  shah_move_impl b c from to = true ->
+  negb (occupied_by b to c) = true.
+Proof.
+  intros b c from to H.
+  unfold shah_move_impl in H.
+  apply andb_prop in H. destruct H as [H _].
+  apply andb_prop in H. destruct H as [_ Hocc].
+  exact Hocc.
+Qed.
+
+(** Helper: ferz_move_impl checks target is not friendly *)
+Lemma ferz_move_checks_not_friendly : forall b c from to,
+  ferz_move_impl b c from to = true ->
+  negb (occupied_by b to c) = true.
+Proof.
+  intros b c from to H.
+  unfold ferz_move_impl in H.
+  apply andb_prop in H. destruct H as [_ Hocc].
+  exact Hocc.
+Qed.
+
+(** Helper: alfil_move_impl checks target is not friendly *)
+Lemma alfil_move_checks_not_friendly : forall b c from to,
+  alfil_move_impl b c from to = true ->
+  negb (occupied_by b to c) = true.
+Proof.
+  intros b c from to H.
+  unfold alfil_move_impl in H.
+  apply andb_prop in H. destruct H as [_ Hocc].
+  exact Hocc.
+Qed.
+
+(** Helper: faras_move_impl checks target is not friendly *)
+Lemma faras_move_checks_not_friendly : forall b c from to,
+  faras_move_impl b c from to = true ->
+  negb (occupied_by b to c) = true.
+Proof.
+  intros b c from to H.
+  unfold faras_move_impl in H.
+  apply andb_prop in H. destruct H as [_ Hocc].
+  exact Hocc.
+Qed.
+
+(** Helper: rukh_move_impl checks target is not friendly *)
+Lemma rukh_move_checks_not_friendly : forall b c from to,
+  rukh_move_impl b c from to = true ->
+  negb (occupied_by b to c) = true.
+Proof.
+  intros b c from to H.
+  unfold rukh_move_impl in H.
+  apply existsb_exists in H.
+  destruct H as [dir [_ Hmatch]].
+  destruct (rukh_find_path_distance b from (fst dir) (snd dir) to rukh_max_distance); [|discriminate].
+  exact Hmatch.
+Qed.
+
+(** Helper: Legal moves only capture opposite color *)
+Lemma legal_capture_opposite_color : forall st from to target,
+  legal_move_impl st (Normal from to) = true ->
+  (board st)[to] = Some target ->
+  forall pc, (board st)[from] = Some pc ->
+  piece_color pc <> piece_color target.
+Proof.
+  intros st from to target Hlegal Htarget pc Hfrom.
+  unfold legal_move_impl in Hlegal.
+  rewrite Hfrom in Hlegal.
+  apply andb_prop in Hlegal. destruct Hlegal as [Hcolor Hrest].
+  apply andb_prop in Hrest. destruct Hrest as [Hcan _].
+  apply Color_beq_eq in Hcolor.
+  assert (Hnot_friendly: negb (occupied_by (board st) to (piece_color pc)) = true).
+  {
+    unfold can_move_piece in Hcan.
+    destruct (piece_type pc).
+    - apply (shah_move_checks_not_friendly (board st) (piece_color pc) from to). exact Hcan.
+    - apply (ferz_move_checks_not_friendly (board st) (piece_color pc) from to). exact Hcan.
+    - apply (alfil_move_checks_not_friendly (board st) (piece_color pc) from to). exact Hcan.
+    - apply (faras_move_checks_not_friendly (board st) (piece_color pc) from to). exact Hcan.
+    - apply (rukh_move_checks_not_friendly (board st) (piece_color pc) from to). exact Hcan.
+    - unfold baidaq_move_impl in Hcan.
+      apply orb_prop in Hcan.
+      destruct Hcan as [Hforward|Hcapture].
+      + destruct (offset from (fst (baidaq_move_vector (piece_color pc)))
+                              (snd (baidaq_move_vector (piece_color pc)))) eqn:Hoff; [|discriminate].
+        apply andb_prop in Hforward. destruct Hforward as [Heq Hemp].
+        unfold position_beq in Heq.
+        destruct (position_eq_dec p to); [|discriminate].
+        subst p.
+        unfold empty, occupied in Hemp.
+        rewrite Htarget in Hemp. simpl in Hemp. discriminate.
+      + apply existsb_exists in Hcapture.
+        destruct Hcapture as [[dr df] [_ Hcap]].
+        simpl in Hcap.
+        destruct (offset from dr df) eqn:Hoff2; [|discriminate].
+        apply andb_prop in Hcap. destruct Hcap as [Heq Hnotfriend].
+        unfold position_beq in Heq.
+        destruct (position_eq_dec p to); [|discriminate].
+        subst p.
+        rewrite Htarget in Hnotfriend.
+        simpl in Hnotfriend.
+        unfold occupied_by.
+        rewrite Htarget.
+        simpl.
+        exact Hnotfriend.
+  }
+  intro Heq.
+  assert (H: piece_color target <> piece_color pc).
+  {
+    apply occupied_by_prevents_same_color with (b := board st) (pos := to) (c := piece_color pc).
+    - exact Hnot_friendly.
+    - exact Htarget.
+  }
+  apply H.
+  symmetry.
+  exact Heq.
+Qed.
+
+(** Example: When a Rukh captures legally, it's always opposite color *)
+Example rukh_legal_capture_opposite :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileD) then Some white_rukh
+    else if position_beq pos (mkPosition rank4 fileH) then Some black_faras
+    else if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else None in
+  let st := mkGameState b White 0 1 false in
+  let capture_move := Normal (mkPosition rank4 fileD) (mkPosition rank4 fileH) in
+  (* This configuration allows the capture *)
+  legal_move_impl st capture_move = true /\
+  piece_color white_rukh <> piece_color black_faras.
+Proof.
+  split.
+  - compute. reflexivity.
+  - intro H. discriminate.
+Qed.
+
 (** * End of Section 15: Game Tree Properties *)
+      
