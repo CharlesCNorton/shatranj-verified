@@ -7618,3 +7618,161 @@ Proof.
 Qed.
 
 (** * End of Section 12: Move Legality *)
+
+(* ========================================================================= *)
+(* SECTION 13: MOVE APPLICATION                                             *)
+(* ========================================================================= *)
+
+(** * 13.1 Core Move Application *)
+
+(** Check if a move results in a capture *)
+Definition is_capture_move (st: GameState) (m: Move) : bool :=
+  match m with
+  | Normal _ to | Promotion _ to =>
+      match (board st)[to] with
+      | Some _ => true
+      | None => false
+      end
+  | _ => false
+  end.
+
+(** Example: Rukh capturing an opponent piece *)
+Example capture_detection_example :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank1 fileH) then Some black_faras
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank5 fileE) then Some white_shah
+    else None in
+  let st := mkGameState b White 0 50 false in
+  let capture_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileH) in
+  let non_capture_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileD) in
+  (* Rukh captures Faras on h1 *)
+  (is_capture_move st capture_move = true) /\
+  (* Rukh moves to empty d1 *)
+  (is_capture_move st non_capture_move = false).
+Proof.
+  split; reflexivity.
+Qed.
+
+(** Check if a move is made by a Baidaq *)
+Definition is_baidaq_move (st: GameState) (m: Move) : bool :=
+  match m with
+  | Normal from _ | Promotion from _ =>
+      match (board st)[from] with
+      | Some pc => PieceType_beq (piece_type pc) Baidaq
+      | None => false
+      end
+  | _ => false
+  end.
+
+(** Example: Detecting Baidaq moves *)
+Example baidaq_move_detection :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank2 fileE) then Some white_baidaq
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else None in
+  let st := mkGameState b White 0 50 false in
+  let baidaq_move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  let rukh_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileB) in
+  (* Baidaq move is detected *)
+  (is_baidaq_move st baidaq_move = true) /\
+  (* Rukh move is not a Baidaq move *)
+  (is_baidaq_move st rukh_move = false).
+Proof.
+  split; reflexivity.
+Qed.
+
+(** * 13.2 State Transition Properties *)
+
+(** Helper: apply_move_impl updates the halfmove clock correctly *)  
+Lemma apply_move_halfmove_clock : forall st m st' from to,
+  apply_move_impl st m = Some st' ->
+  (m = Normal from to \/ m = Promotion from to) ->
+  halfmove_clock st' = 
+    update_halfmove_clock st (is_capture_move st m) (is_baidaq_move st m).
+Proof.
+  intros st m st' from to H Hm.
+  unfold apply_move_impl in H.
+  destruct m; try (destruct Hm as [Hd|Hd]; discriminate).
+  - (* Normal move *)
+    destruct ((board st)[p]) eqn:Hpc; [|discriminate].
+    injection H. intro Heq. rewrite <- Heq. simpl.
+    unfold is_capture_move, is_baidaq_move. simpl.
+    rewrite Hpc.
+    reflexivity.
+  - (* Promotion move *)
+    destruct ((board st)[p]) eqn:Hpc; [|discriminate].
+    injection H. intro Heq. rewrite <- Heq. simpl.
+    unfold is_capture_move, is_baidaq_move. simpl.
+    rewrite Hpc.
+    reflexivity.
+Qed.
+
+(** * 13.3 Main Validation *)
+
+(** REQUIRED BY SPEC: Legal moves can be applied successfully *)
+Example apply_legal_succeeds_validation : forall st m,
+  WellFormedState st = true ->
+  legal_move_impl st m = true ->
+  (exists st', apply_move_impl st m = Some st') \/
+  (exists c, m = Resignation c) \/
+  (m = DrawAccept).
+Proof.
+  intros st m Hwf Hlegal.
+  (* This is exactly the theorem we proved in Section 12 *)
+  apply apply_legal_succeeds; assumption.
+Qed.
+
+(** Example: Applying a White Baidaq opening move *)
+Example apply_baidaq_opening :
+  let st := initial_game_state in
+  let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  (* This move is legal *)
+  legal_move_impl st move = true /\
+  (* And it can be applied *)
+  exists st', 
+    apply_move_impl st move = Some st' /\
+    (* After the move, it's Black's turn *)
+    turn st' = Black /\
+    (* The Baidaq is now at e3 *)
+    (board st')[mkPosition rank3 fileE] = Some white_baidaq /\
+    (* e2 is now empty *)
+    (board st')[mkPosition rank2 fileE] = None.
+Proof.
+  split.
+  - (* Move is legal *)
+    compute. reflexivity.
+  - (* Apply move properties *)
+    eexists. split.
+    + compute. reflexivity.
+    + split; [|split; [|split]]; compute; reflexivity.
+Qed.
+
+(** Example: Baidaq promotion automatically creates Ferz *)
+Example apply_promotion :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileH) then Some black_shah
+    else None in
+  let st := mkGameState b White 0 50 false in
+  let move := Promotion (mkPosition rank7 fileE) (mkPosition rank8 fileE) in
+  (* Can apply the promotion *)
+  exists st',
+    apply_move_impl st move = Some st' /\
+    (* After promotion, there's a Ferz at e8 *)
+    (board st')[mkPosition rank8 fileE] = Some white_ferz /\
+    (* e7 is now empty *)
+    (board st')[mkPosition rank7 fileE] = None /\
+    (* It's Black's turn *)
+    turn st' = Black.
+Proof.
+  eexists. split.
+  - compute. reflexivity.
+  - split; [|split; [|split]]; compute; reflexivity.
+Qed.
+
+(** * End of Section 13: Move Application *)
