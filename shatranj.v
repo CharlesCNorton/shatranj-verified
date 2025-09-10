@@ -8949,5 +8949,65 @@ Proof.
     exact H2.
 Qed.
 
-(** * End of Section 15: Game Tree Pr operties *)
+(** * 15.3 Well-Formedness Preservation *)
+
+Lemma board_move_preserves_shah_at_other_positions : forall b from to pos pc,
+  b[pos] = Some pc ->
+  piece_type pc = Shah ->
+  pos <> from ->
+  pos <> to ->
+  (board_move b from to)[pos] = Some pc.
+Proof.
+  intros b from to pos pc Hpc Hshah Hneq_from Hneq_to.
+  unfold board_move.
+  destruct (b[from]).
+  - simpl.
+    destruct (position_eq_dec to pos).
+    + subst. contradiction.
+    + destruct (position_eq_dec from pos).
+      * subst. contradiction.
+      * exact Hpc.
+  - exact Hpc.
+Qed.
+
+Lemma board_place_preserves_shah_at_other_positions : forall b pos new_pc other_pos pc,
+  b[other_pos] = Some pc ->
+  piece_type pc = Shah ->
+  other_pos <> pos ->
+  (board_place b pos new_pc)[other_pos] = Some pc.
+Proof.
+  intros b pos new_pc other_pos pc Hpc Hshah Hneq.
+  unfold board_place. simpl.
+  destruct (position_eq_dec pos other_pos).
+  - subst. contradiction.
+  - exact Hpc.
+Qed.
+
+Lemma draw_offer_preserves_wellformed : forall st st',
+  WellFormedState st = true ->
+  apply_move_impl st DrawOffer = Some st' ->
+  WellFormedState st' = true.
+Proof.
+  intros st st' Hwf Happly.
+  unfold apply_move_impl in Happly.
+  injection Happly; intro; subst st'.
+  simpl. exact Hwf.
+Qed.
+
+Lemma legal_move_source_has_piece : forall st from to,
+  legal_move_impl st (Normal from to) = true ->
+  exists pc, (board st)[from] = Some pc /\ piece_color pc = turn st.
+Proof.
+  intros st from to H.
+  unfold legal_move_impl in H.
+  destruct ((board st)[from]) as [pc|] eqn:Hpc.
+  - exists pc. split. 
+    + reflexivity.
+    + apply andb_prop in H. destruct H as [Hcolor _].
+      apply Color_beq_eq. exact Hcolor.
+  - discriminate.
+Qed.
+
+
+(** * End of Section 15: Game Tree Properties *)
   
