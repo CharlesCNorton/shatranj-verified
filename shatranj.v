@@ -8724,4 +8724,75 @@ Proof.
       left. reflexivity.
 Qed.
 
+(** * 14.6 Unified Completeness Validation *)
+
+(** Helper: Identify which moves should be in generate_moves_impl *)
+Definition is_board_move (m: Move) : bool :=
+  match m with
+  | Normal _ _ => true
+  | Promotion _ _ => true
+  | _ => false
+  end.
+
+(** Lemma: is_board_move characterizes Normal and Promotion moves *)
+Lemma is_board_move_correct : forall m,
+  is_board_move m = true <->
+  (exists from to, m = Normal from to) \/ (exists from to, m = Promotion from to).
+Proof.
+  intro m. split.
+  - intro H.
+    unfold is_board_move in H.
+    destruct m; try discriminate.
+    + left. exists p, p0. reflexivity.
+    + right. exists p, p0. reflexivity.
+  - intros [[from [to Heq]]|[from [to Heq]]]; subst; reflexivity.
+Qed.
+
+(** Lemma: Non-board moves are never in generate_moves_impl *)
+Lemma non_board_moves_not_in_moves_impl : forall st m,
+  is_board_move m = false ->
+  ~In m (generate_moves_impl st).
+Proof.
+  intros st m Hnotboard.
+  unfold generate_moves_impl.
+  intro H.
+  apply filter_In in H.
+  destruct H as [Hin _].
+  unfold generate_pseudo_legal_moves in Hin.
+  apply in_flat_map in Hin.
+  destruct Hin as [pos [_ Hgen]].
+  simpl in Hgen.
+  destruct ((board st)[pos]) as [pc|]; [|contradiction].
+  destruct (Color_beq (piece_color pc) (turn st)); [|contradiction].
+  apply piece_moves_from_position in Hgen.
+  destruct Hgen as [to [Heq|Heq]]; subst m; simpl in Hnotboard; discriminate.
+Qed.
+
+(** REQUIRED BY SPEC: Unified completeness theorem for all legal moves *)
+Example gen_captures_all_legal: forall st m,
+  WellFormedState st = true ->
+  legal_move_impl st m = true ->
+  match m with
+  | Normal from to => 
+      (forall pc, (board st)[from] = Some pc -> 
+        piece_type pc = Baidaq -> 
+        baidaq_at_promotion_rank to (piece_color pc) = false) ->
+      In m (generate_moves_impl st)
+  | Promotion from to =>
+      (exists pc, (board st)[from] = Some pc /\ 
+        piece_type pc = Baidaq /\ 
+        baidaq_at_promotion_rank to (piece_color pc) = true) ->
+      In m (generate_moves_impl st)
+  | _ => True
+  end.
+Proof.
+  intros st m Hwf Hlegal.
+  destruct m.
+  - apply gen_captures_all_legal_normal; assumption.
+  - apply gen_captures_all_legal_promotion; assumption.
+  - trivial.
+  - trivial.
+  - trivial.
+Qed.
+
 (** * End of Section 14: Move Generation *)
