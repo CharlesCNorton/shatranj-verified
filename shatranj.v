@@ -7061,17 +7061,90 @@ Proof.
     + exact Hmove.
     + split.
       * destruct ((board st)[to]) eqn:Hdest.
-        -- (* We need: piece_color p0 <> turn st
-              We have: piece_color pc = turn st (from Hcolor)
-              no_friendly_fire gives us: piece_color p0 <> piece_color pc *)
-           pose proof (no_friendly_fire (board st) pc from to Hpiece Hmove p0 Hdest) as Hneq'.
-           assert (piece_color pc = turn st) as Heq.
-           { apply Color_beq_eq. exact Hcolor. }
-           rewrite <- Heq. exact Hneq'.
+        -- (* We need: piece_color p <> turn st
+              We get this from can_move_piece which checks occupied_by *)
+           unfold can_move_piece in Hmove.
+           destruct (piece_type pc) eqn:Htype.
+           ++ (* Shah case *)
+              unfold shah_move_impl in Hmove.
+              apply andb_prop in Hmove. destruct Hmove as [H _].
+              apply andb_prop in H. destruct H as [_ Hoccupy].
+              unfold occupied_by in Hoccupy.
+              rewrite Hdest in Hoccupy.
+              simpl in Hoccupy.
+              apply negb_true_iff in Hoccupy.
+              apply Color_beq_neq in Hoccupy.
+              assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
+              congruence.
+           ++ (* Ferz case - similar pattern *)
+              unfold ferz_move_impl in Hmove.
+              apply andb_prop in Hmove. destruct Hmove as [_ Hoccupy].
+              unfold occupied_by in Hoccupy.
+              rewrite Hdest in Hoccupy.
+              simpl in Hoccupy.
+              apply negb_true_iff in Hoccupy.
+              apply Color_beq_neq in Hoccupy.
+              assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
+              congruence.
+           ++ (* Alfil case *)
+              unfold alfil_move_impl in Hmove.
+              apply andb_prop in Hmove. destruct Hmove as [_ Hoccupy].
+              unfold occupied_by in Hoccupy.
+              rewrite Hdest in Hoccupy.
+              simpl in Hoccupy.
+              apply negb_true_iff in Hoccupy.
+              apply Color_beq_neq in Hoccupy.
+              assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
+              congruence.
+           ++ (* Faras case *)
+              unfold faras_move_impl in Hmove.
+              apply andb_prop in Hmove. destruct Hmove as [_ Hoccupy].
+              unfold occupied_by in Hoccupy.
+              rewrite Hdest in Hoccupy.
+              simpl in Hoccupy.
+              apply negb_true_iff in Hoccupy.
+              apply Color_beq_neq in Hoccupy.
+              assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
+              congruence.
+           ++ (* Rukh case *)
+              unfold rukh_move_impl in Hmove.
+              apply existsb_exists in Hmove.
+              destruct Hmove as [dir [Hin Hmatch]].
+              destruct (rukh_find_path_distance (board st) from (fst dir) (snd dir) to rukh_max_distance); [|discriminate].
+              unfold occupied_by in Hmatch.
+              rewrite Hdest in Hmatch.
+              simpl in Hmatch.
+              apply negb_true_iff in Hmatch.
+              apply Color_beq_neq in Hmatch.
+              assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
+              congruence.
+           ++ (* Baidaq case *)
+              unfold baidaq_move_impl in Hmove.
+              apply orb_prop in Hmove.
+              destruct Hmove as [Hmove|Hcapture].
+              ** (* Forward move - destination must be empty, contradiction *)
+                 destruct (offset from (fst (baidaq_move_vector (piece_color pc)))
+                                      (snd (baidaq_move_vector (piece_color pc)))); [|discriminate].
+                 apply andb_prop in Hmove. destruct Hmove as [_ Hemp].
+                 unfold empty, occupied in Hemp.
+                 rewrite Hdest in Hemp. simpl in Hemp. discriminate.
+              ** (* Capture move *)
+                 apply existsb_exists in Hcapture.
+                 destruct Hcapture as [[dr df] [_ Hcheck']].
+                 simpl in Hcheck'.
+                 destruct (offset from dr df); [|discriminate].
+                 apply andb_prop in Hcheck'. destruct Hcheck' as [_ Hpiece'].
+                 rewrite Hdest in Hpiece'.
+                 apply negb_true_iff in Hpiece'.
+                 apply Color_beq_neq in Hpiece'.
+                 assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
+                 congruence.
         -- trivial.
-      * destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hshah.
+      * simpl.
+        destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hshah.
         -- apply negb_true_iff in Hcheck. exact Hcheck.
         -- discriminate.
 Qed.
 
 (** * End of Section 12: Move Legality *)
+                   
