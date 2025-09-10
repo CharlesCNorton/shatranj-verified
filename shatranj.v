@@ -8506,4 +8506,102 @@ Proof.
   - compute. reflexivity.
 Qed.
 
+(** * 14.5 Non-trivial Invariants for Move Generation *)
+
+(** INVARIANT 1: Every piece at a position generates moves only from that position *)
+Lemma piece_moves_from_position : forall b pc from,
+  forall m, In m (generate_piece_moves b pc from) ->
+  exists to, m = Normal from to \/ m = Promotion from to.
+Proof.
+  intros b pc from m Hin.
+  unfold generate_piece_moves in Hin.
+  destruct (piece_type pc).
+  - unfold generate_shah_moves in Hin.
+    apply in_map_iff in Hin.
+    destruct Hin as [to [Heq _]].
+    exists to. left. symmetry. exact Heq.
+  - unfold generate_ferz_moves in Hin.
+    apply in_map_iff in Hin.
+    destruct Hin as [to [Heq _]].
+    exists to. left. symmetry. exact Heq.
+  - unfold generate_alfil_moves in Hin.
+    apply in_map_iff in Hin.
+    destruct Hin as [to [Heq _]].
+    exists to. left. symmetry. exact Heq.
+  - unfold generate_faras_moves in Hin.
+    apply in_map_iff in Hin.
+    destruct Hin as [to [Heq _]].
+    exists to. left. symmetry. exact Heq.
+  - unfold generate_rukh_moves in Hin.
+    apply in_map_iff in Hin.
+    destruct Hin as [to [Heq _]].
+    exists to. left. symmetry. exact Heq.
+  - unfold generate_baidaq_moves in Hin.
+    apply in_flat_map in Hin.
+    destruct Hin as [to [_ Hin']].
+    simpl in Hin'.
+    destruct (baidaq_at_promotion_rank to (piece_color pc)).
+    + destruct Hin' as [Heq|H]; [|contradiction].
+      exists to. right. symmetry. exact Heq.
+    + destruct Hin' as [Heq|H]; [|contradiction].
+      exists to. left. symmetry. exact Heq.
+Qed.
+
+(** INVARIANT 2: Pseudo-legal moves only come from pieces of the current player *)
+Lemma pseudo_legal_correct_color : forall st m,
+  In m (generate_pseudo_legal_moves st) ->
+  match m with
+  | Normal from _ | Promotion from _ =>
+      exists pc, (board st)[from] = Some pc /\ piece_color pc = turn st
+  | _ => False
+  end.
+Proof.
+  intros st m Hin.
+  unfold generate_pseudo_legal_moves in Hin.
+  apply in_flat_map in Hin.
+  destruct Hin as [pos [_ Hgen]].
+  simpl in Hgen.
+  destruct ((board st)[pos]) as [pc|] eqn:Hpc; [|contradiction].
+  destruct (Color_beq (piece_color pc) (turn st)) eqn:Hcolor; [|contradiction].
+  apply Color_beq_eq in Hcolor.
+  apply piece_moves_from_position in Hgen.
+  destruct Hgen as [to [Heq|Heq]]; subst m.
+  - exists pc. split; assumption.
+  - exists pc. split; assumption.
+Qed.
+
+(** INVARIANT 3: Promotion moves are generated iff baidaq reaches promotion rank *)
+Lemma promotion_generation_invariant : forall b c from to,
+  In (Promotion from to) (generate_baidaq_moves b c from) <->
+  (baidaq_move_impl b c from to = true /\ baidaq_at_promotion_rank to c = true).
+Proof.
+  intros b c from to.
+  split.
+  - intro Hin.
+    unfold generate_baidaq_moves in Hin.
+    apply in_flat_map in Hin.
+    destruct Hin as [to' [Hfilter Hgen]].
+    simpl in Hgen.
+    destruct (baidaq_at_promotion_rank to' c) eqn:Hprom.
+    + destruct Hgen as [Heq|H]; [|contradiction].
+      injection Heq. intros Hto.
+      subst to'.
+      apply filter_In in Hfilter.
+      destruct Hfilter as [_ Hmove].
+      split; assumption.
+    + destruct Hgen as [Heq|H]; [discriminate|contradiction].
+  - intros [Hmove Hprom].
+    unfold generate_baidaq_moves.
+    apply in_flat_map.
+    exists to.
+    split.
+    + apply filter_In.
+      split.
+      * apply enum_position_complete.
+      * exact Hmove.
+    + simpl.
+      rewrite Hprom.
+      left. reflexivity.
+Qed.
+
 (** * End of Section 14: Move Generation *)
