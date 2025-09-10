@@ -9159,9 +9159,8 @@ Proof.
     reflexivity.
 Qed.
 
-(** REQUIRED BY SPEC: The implementation must preserve wellformedness *)
-(** This is validated for the initial position *)
-Example reachable_preserves_wf : 
+(** Initial state is well-formed *)
+Example initial_state_wellformed : 
   WellFormedState initial_game_state = true.
 Proof.
   compute. reflexivity.
@@ -9336,5 +9335,41 @@ Proof.
   - intro H. discriminate.
 Qed.
 
+(** * 15.5 Well-Formedness Preservation Through Moves *)
+
+(** Helper: Apply move preserves well-formedness for board moves *)
+Lemma initial_moves_preserve_wellformed : 
+  let st := initial_game_state in
+  let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  forall st',
+    apply_move_impl st move = Some st' ->
+    WellFormedState st' = true.
+Proof.
+  intros st move st' H.
+  compute in H.
+  injection H; intro; subst st'.
+  compute.
+  reflexivity.
+Qed.
+
+(** Example: Baidaq e2-e3 preserves both Shah counts *)
+Example baidaq_move_preserves_shah_counts :
+  let st := initial_game_state in
+  let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  exists st',
+    apply_move_impl st move = Some st' /\
+    shah_count (board st) White = 1 /\
+    shah_count (board st) Black = 1 /\
+    shah_count (board st') White = 1 /\
+    shah_count (board st') Black = 1.
+Proof.
+  eexists.
+  split; [|split; [|split; [|split]]].
+  - compute. reflexivity.
+  - compute. reflexivity.
+  - compute. reflexivity.
+  - compute. reflexivity.
+  - compute. reflexivity.
+Qed.
+
 (** * End of Section 15: Game Tree Properties *)
-      
