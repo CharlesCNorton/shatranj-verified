@@ -8003,4 +8003,176 @@ Proof.
       * reflexivity.
 Qed.
 
+(** * 13.6 Draw Offer Persistence Properties *)
+
+(** THEOREM: DrawOffer sets the draw_offer_pending flag *)
+Theorem draw_offer_sets_flag : forall st st',
+  apply_move_impl st DrawOffer = Some st' ->
+  draw_offer_pending st' = true.
+Proof.
+  intros st st' H.
+  unfold apply_move_impl in H.
+  injection H; intro Heq; subst st'.
+  simpl. reflexivity.
+Qed.
+
+(** Example: White offers a draw in a balanced endgame position *)
+Example white_offers_draw_endgame :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank8 fileH) then Some black_rukh
+    else None in
+  let st := mkGameState b White 45 80 false in  (* Late endgame, no draw offer pending *)
+  exists st',
+    apply_move_impl st DrawOffer = Some st' /\
+    (* Draw offer is now pending *)
+    draw_offer_pending st' = true /\
+    (* Board unchanged *)
+    board st' = board st /\
+    (* Turn unchanged - still White's turn until Black responds *)
+    turn st' = White /\
+    (* Move counters unchanged *)
+    halfmove_clock st' = 45 /\
+    fullmove_number st' = 80.
+Proof.
+  eexists. split.
+  - simpl. reflexivity.
+  - split; [|split; [|split; [|split; [|split]]]]; simpl; reflexivity.
+Qed.
+
+(** THEOREM: Normal moves clear the draw_offer_pending flag *)
+Theorem normal_move_clears_draw_offer : forall st from to st',
+  apply_move_impl st (Normal from to) = Some st' ->
+  draw_offer_pending st' = false.
+Proof.
+  intros st from to st' H.
+  unfold apply_move_impl in H.
+  destruct ((board st)[from]) eqn:Hpc; [|discriminate].
+  injection H; intro Heq; subst st'.
+  simpl. reflexivity.
+Qed.
+
+(** Example: Black declines draw offer by making a move *)
+Example black_declines_draw_by_moving :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank8 fileH) then Some black_rukh
+    else None in
+  let st := mkGameState b Black 45 80 true in  (* Black's turn, draw offer pending from White *)
+  let move := Normal (mkPosition rank8 fileH) (mkPosition rank8 fileG) in
+  exists st',
+    apply_move_impl st move = Some st' /\
+    (* Draw offer is now cleared - Black declined by playing *)
+    draw_offer_pending st' = false /\
+    (* Turn switches to White *)
+    turn st' = White /\
+    (* Rukh moved to g8 *)
+    (board st')[mkPosition rank8 fileG] = Some black_rukh /\
+    (* h8 is now empty *)
+    (board st')[mkPosition rank8 fileH] = None.
+Proof.
+  eexists. split.
+  - simpl. reflexivity.
+  - split; [|split; [|split; [|split]]]; simpl; reflexivity.
+Qed.
+
+(** THEOREM: Promotion moves also clear the draw_offer_pending flag *)
+Theorem promotion_clears_draw_offer : forall st from to st',
+  apply_move_impl st (Promotion from to) = Some st' ->
+  draw_offer_pending st' = false.
+Proof.
+  intros st from to st' H.
+  unfold apply_move_impl in H.
+  destruct ((board st)[from]) eqn:Hpc; [|discriminate].
+  injection H; intro Heq; subst st'.
+  simpl. reflexivity.
+Qed.
+
+(** Example: Complete draw offer lifecycle in an endgame *)
+Example draw_offer_complete_lifecycle :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank8 fileH) then Some black_rukh
+    else None in
+  let st0 := mkGameState b White 48 75 false in  (* Initial: no draw offer *)
+  (* Step 1: White offers draw *)
+  exists st1,
+    apply_move_impl st0 DrawOffer = Some st1 /\
+    draw_offer_pending st1 = true /\
+    turn st1 = White /\  (* Turn doesn't change on offer *)
+    (* Step 2: White makes a move (changes mind) *)
+    exists st2,
+      apply_move_impl st1 (Normal (mkPosition rank1 fileA) (mkPosition rank2 fileA)) = Some st2 /\
+      draw_offer_pending st2 = false /\  (* Offer cleared *)
+      turn st2 = Black /\
+      (* Step 3: Black moves, then White offers draw again *)
+      exists st3,
+        apply_move_impl st2 (Normal (mkPosition rank8 fileH) (mkPosition rank7 fileH)) = Some st3 /\
+        draw_offer_pending st3 = false /\  (* Still no offer *)
+        turn st3 = White /\
+        exists st4,
+          apply_move_impl st3 DrawOffer = Some st4 /\
+          draw_offer_pending st4 = true /\  (* New offer pending *)
+          turn st4 = White.
+Proof.
+  eexists. split.
+  - (* Step 1: White offers draw *)
+    simpl. reflexivity.
+  - split; [simpl; reflexivity|].
+    split; [simpl; reflexivity|].
+    (* Step 2: White moves *)
+    eexists. split.
+    + simpl. reflexivity.
+    + split; [simpl; reflexivity|].
+      split; [simpl; reflexivity|].
+      (* Step 3: Black moves *)
+      eexists. split.
+      * simpl. reflexivity.
+      * split; [simpl; reflexivity|].
+        split; [simpl; reflexivity|].
+        (* Step 4: White offers draw again *)
+        eexists. split.
+        -- simpl. reflexivity.
+        -- split; simpl; reflexivity.
+Qed.
+
+(** COMPREHENSIVE THEOREM: Draw offer persistence behavior *)
+Theorem draw_offer_persistence_complete : forall st m st',
+  apply_move_impl st m = Some st' ->
+  match m with
+  | DrawOffer => 
+      (* DrawOffer sets the flag and preserves everything else *)
+      draw_offer_pending st' = true /\
+      board st' = board st /\
+      turn st' = turn st /\
+      halfmove_clock st' = halfmove_clock st /\
+      fullmove_number st' = fullmove_number st
+  | Normal _ _ | Promotion _ _ =>
+      (* Board moves clear the flag *)
+      draw_offer_pending st' = false
+  | _ => True  (* Resignation and DrawAccept end the game *)
+  end.
+Proof.
+  intros st m st' H.
+  destruct m.
+  - (* Normal move *)
+    apply (normal_move_clears_draw_offer st p p0). exact H.
+  - (* Promotion *)
+    apply (promotion_clears_draw_offer st p p0). exact H.
+  - (* Resignation *)
+    trivial.
+  - (* DrawOffer *)
+    unfold apply_move_impl in H.
+    injection H; intro Heq; subst st'.
+    simpl. split; [|split; [|split; [|split]]]; reflexivity.
+  - (* DrawAccept *)
+    trivial.
+Qed.
+
 (** * End of Section 13: Move Application *)
