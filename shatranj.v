@@ -8326,9 +8326,22 @@ Definition generate_pseudo_legal_moves (st: GameState) : list Move :=
 
 (** * 14.3 Legal Move Generation *)
 
+(** Generate all possible moves including non-board moves *)
+Definition generate_all_pseudo_legal_moves (st: GameState) : list Move :=
+  (* Board moves from pieces *)
+  generate_pseudo_legal_moves st ++
+  (* Non-board moves - always available *)
+  [Resignation (turn st); DrawOffer] ++
+  (* DrawAccept only if offer pending *)
+  (if draw_offer_pending st then [DrawAccept] else []).
+
 (** Main move generation function - generates all legal moves *)
 Definition generate_moves_impl (st: GameState) : list Move :=
   filter (fun m => legal_move_impl st m) (generate_pseudo_legal_moves st).
+
+(** Complete move generation including non-board moves *)
+Definition generate_all_moves (st: GameState) : list Move :=
+  filter (fun m => legal_move_impl st m) (generate_all_pseudo_legal_moves st).
 
 (** Example: Initial position has legal moves *)
 Example initial_position_has_moves :
@@ -8469,6 +8482,70 @@ Proof.
   - intro H. simpl in H. destruct H as [H|H]; [discriminate | exact H].
 Qed.
 
+(** Helper: Promotion moves are in the pseudo-legal list when required *)
+Lemma promotion_move_in_pseudo_legal : forall st from to,
+  legal_move_impl st (Promotion from to) = true ->
+  (exists pc, (board st)[from] = Some pc /\ 
+    piece_type pc = Baidaq /\ 
+    baidaq_at_promotion_rank to (piece_color pc) = true) ->
+  In (Promotion from to) (generate_pseudo_legal_moves st).
+Proof.
+  intros st from to Hlegal [pc [Hpc [Hbaidaq Hprom]]].
+  unfold generate_pseudo_legal_moves.
+  apply in_flat_map.
+  exists from.
+  split.
+  - apply enum_position_complete.
+  - simpl.
+    rewrite Hpc.
+    unfold legal_move_impl in Hlegal.
+    rewrite Hpc in Hlegal.
+    apply andb_prop in Hlegal.
+    destruct Hlegal as [Hcolor Hrest].
+    apply Color_beq_eq in Hcolor.
+    rewrite <- Hcolor.
+    rewrite Color_beq_refl.
+    unfold generate_piece_moves.
+    rewrite Hbaidaq.
+    unfold generate_baidaq_moves.
+    apply in_flat_map.
+    exists to.
+    split.
+    + apply filter_In.
+      split.
+      * apply enum_position_complete.
+      * apply andb_prop in Hrest.
+        destruct Hrest as [Hmove _].
+        unfold can_move_piece in Hmove.
+        rewrite Hbaidaq in Hmove.
+        exact Hmove.
+    + simpl.
+      rewrite Hprom.
+      left. reflexivity.
+Qed.
+
+(** Helper: Non-board moves are always in the complete pseudo-legal list *)
+Lemma non_board_moves_in_all_pseudo_legal : forall st,
+  In (Resignation (turn st)) (generate_all_pseudo_legal_moves st) /\
+  In DrawOffer (generate_all_pseudo_legal_moves st) /\
+  (draw_offer_pending st = true -> In DrawAccept (generate_all_pseudo_legal_moves st)).
+Proof.
+  intro st.
+  unfold generate_all_pseudo_legal_moves.
+  split; [|split].
+  - apply in_or_app. right.
+    apply in_or_app. left.
+    simpl. left. reflexivity.
+  - apply in_or_app. right.
+    apply in_or_app. left.
+    simpl. right. left. reflexivity.
+  - intro Hdraw.
+    apply in_or_app. right.
+    apply in_or_app. right.
+    rewrite Hdraw. simpl.
+    left. reflexivity.
+Qed.
+
 (** REQUIRED BY SPEC: All legal Normal moves are in generated list *)
 Example gen_captures_all_legal_normal: forall st from to,
   WellFormedState st = true ->
@@ -8500,6 +8577,49 @@ Proof.
     split.
     + apply enum_position_complete.
     + simpl. 
+      unfold generate_piece_moves, generate_baidaq_moves.
+      simpl.
+      left. reflexivity.
+  - compute. reflexivity.
+Qed.
+
+(** Example: All legal Promotion moves are in generated list *)
+Example gen_captures_all_legal_promotion : forall st from to,
+  WellFormedState st = true ->
+  legal_move_impl st (Promotion from to) = true ->
+  (exists pc, (board st)[from] = Some pc /\ 
+    piece_type pc = Baidaq /\ 
+    baidaq_at_promotion_rank to (piece_color pc) = true) ->
+  In (Promotion from to) (generate_moves_impl st).
+Proof.
+  intros st from to Hwf Hlegal Hbaidaq_info.
+  unfold generate_moves_impl.
+  apply filter_In.
+  split.
+  - apply (promotion_move_in_pseudo_legal st from to Hlegal Hbaidaq_info).
+  - exact Hlegal.
+Qed.
+
+(** Concrete example: White baidaq promotion to Ferz is properly generated *)
+Example white_baidaq_promotion_generated :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileH) then Some black_shah
+    else None in
+  let st := mkGameState b White 0 50 false in
+  let move := Promotion (mkPosition rank7 fileE) (mkPosition rank8 fileE) in
+  In move (generate_moves_impl st).
+Proof.
+  unfold generate_moves_impl.
+  apply filter_In.
+  split.
+  - unfold generate_pseudo_legal_moves.
+    apply in_flat_map.
+    exists (mkPosition rank7 fileE).
+    split.
+    + apply enum_position_complete.
+    + simpl.
       unfold generate_piece_moves, generate_baidaq_moves.
       simpl.
       left. reflexivity.
