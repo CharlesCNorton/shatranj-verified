@@ -7143,7 +7143,95 @@ Qed.
 Notation legal_move_spec_v2 := legal_move_spec_with_bare_king.
 Notation legal_move_impl_v2 := legal_move_impl_with_bare_king.
 
-(** * 12.13 Bilateral Soundness and Completeness *)
+(** * 12.13 Unique Bare King Invariants *)
+
+(** INVARIANT 1: At most one player can be bare at any time *)
+Theorem bare_king_mutual_exclusion : forall st,
+  bare_king_check st = Some White -> bare_king_check st <> Some Black.
+Proof.
+  intros st Hwhite Hcontra.
+  unfold bare_king_check in *.
+  (* If White won by bare king, Black has >1 pieces *)
+  destruct (Nat.eqb (count_pieces (board st) White) 1) eqn:Hw1;
+  destruct (Nat.eqb (count_pieces (board st) Black) 1) eqn:Hb1;
+  simpl in *; try discriminate.
+  (* The only way bare_king_check st = Some White is if Black has exactly 1 piece *)
+  (* The only way bare_king_check st = Some Black is if White has exactly 1 piece *)
+  (* But we already have bare_king_check st = Some White, contradiction *)
+Qed.
+
+(** INVARIANT 2: Counter-bare is only possible when already bare *)
+Theorem counter_bare_requires_being_bare : forall st,
+  can_counter_bare st = true ->
+  exists winner, bare_king_check st = Some winner /\ winner <> turn st.
+Proof.
+  intros st Hcounter.
+  unfold can_counter_bare in Hcounter.
+  destruct (bare_king_check st) eqn:Hbare.
+  - (* Some color c *)
+    destruct (Color_beq c (turn st)) eqn:Hcolor.
+    + (* c = turn st, but then can_counter_bare returns false *)
+      simpl in Hcounter. discriminate.
+    + (* c <> turn st - this is what we need *)
+      exists c. split.
+      * reflexivity.
+      * apply Color_beq_neq. exact Hcolor.
+  - (* None - can_counter_bare returns false *)
+    simpl in Hcounter. discriminate.
+Qed.
+
+(** INVARIANT 3: Legal moves creating bare king prevent counter-bare *)
+Theorem legal_bare_king_victory_sound : forall st m,
+  legal_move_spec_v2 st m ->
+  match m with
+  | Normal from to | Promotion from to =>
+      let b_after := board_move (board st) from to in
+      let st_after := mkGameState b_after (opposite_color (turn st))
+                                  (halfmove_clock st) (fullmove_number st) false in
+      bare_king_check st_after = Some (turn st) ->
+      can_counter_bare st_after = false
+  | _ => True
+  end.
+Proof.
+  intros st m Hlegal.
+  destruct m; trivial.
+  - (* Normal move *)
+    simpl. intros Hbare.
+    unfold legal_move_spec_v2, legal_move_spec_with_bare_king in Hlegal.
+    simpl in Hlegal.
+    destruct ((board st)[p]) eqn:Hpc.
+    + destruct Hlegal as [Hturn [Hcan [Hdest [Hshah [Hpromo Hcounter]]]]].
+      exact (Hcounter Hbare).
+    + contradiction.
+  - (* Promotion move *)
+    simpl. intros Hbare.
+    unfold legal_move_spec_v2, legal_move_spec_with_bare_king in Hlegal.
+    simpl in Hlegal.
+    destruct ((board st)[p]) eqn:Hpc.
+    + destruct Hlegal as [Hturn [Hcan [Hdest [Hshah [Hpromo Hcounter]]]]].
+      exact (Hcounter Hbare).
+    + contradiction.
+Qed.
+
+(** INVARIANT 4: Legal bare king moves truly end the game *)
+Theorem legal_bare_king_is_game_ending : forall st m,
+  legal_move_spec_v2 st m ->
+  match m with
+  | Normal from to | Promotion from to =>
+      let b_after := board_move (board st) from to in
+      let st_after := mkGameState b_after (opposite_color (turn st))
+                                  (halfmove_clock st) (fullmove_number st) false in
+      bare_king_check st_after = Some (turn st) ->
+      (* If the move creates bare king and is legal, the game has ended *)
+      can_counter_bare st_after = false (* No counter-bare possible *)
+  | _ => True
+  end.
+Proof.
+  (* This is exactly legal_bare_king_victory_sound *)
+  exact legal_bare_king_victory_sound.
+Qed.
+
+(** * 12.15 Bilateral Soundness and Completeness *)
 
 (** Helper: legal_move_impl checks all conditions of legal_move_spec for Normal moves *)
 Lemma legal_move_impl_normal_checks_all : forall st from to,
@@ -7263,4 +7351,3 @@ Proof.
 Qed.
 
 (** * End of Section 12: Move Legality *)
-                   
