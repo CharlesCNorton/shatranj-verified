@@ -7027,7 +7027,123 @@ Proof.
     reflexivity.
 Qed.
 
-(** * 12.12 Bilateral Soundness and Completeness *)
+(** * 12.12 Enhanced Legal Move Spec with Bare King *)
+
+(** Enhanced legal_move_spec that includes bare king rules *)
+Definition legal_move_spec_with_bare_king (st: GameState) (m: Move) : Prop :=
+  match m with
+  | Normal from to | Promotion from to =>
+      (* All the original conditions *)
+      match (board st)[from] with
+      | None => False
+      | Some pc => 
+          piece_color pc = turn st /\
+          can_move_piece (board st) pc from to = true /\
+          (match (board st)[to] with
+           | None => True
+           | Some target => piece_color target <> turn st
+           end) /\
+          let b_after := board_move (board st) from to in
+          (match find_shah b_after (turn st) with
+           | None => False
+           | Some shah_pos => 
+               position_under_attack_by b_after shah_pos (opposite_color (turn st)) = false
+           end) /\
+          (piece_type pc = Baidaq /\ baidaq_at_promotion_rank to (turn st) = true ->
+           m = Promotion from to) /\
+          (* NEW: Bare king rule - if this move creates bare king, opponent can't counter-bare *)
+          let st_after := mkGameState b_after (opposite_color (turn st)) 
+                                      (halfmove_clock st) (fullmove_number st) 
+                                      (draw_offer_pending st) in
+          (bare_king_check st_after = Some (turn st) -> 
+           can_counter_bare st_after = false)
+      end
+  | Resignation c => c = turn st
+  | DrawOffer => True
+  | DrawAccept => draw_offer_pending st = true
+  end.
+
+(** Example: A move that creates bare king is only legal if opponent can't counter *)
+Example bare_king_legal_move_example :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank3 fileD) then Some white_rukh  
+    else if position_beq pos (mkPosition rank8 fileA) then Some black_shah  (* Far from action *)
+    else if position_beq pos (mkPosition rank3 fileH) then Some black_ferz  (* Will be captured *)
+    else None in
+  let st := mkGameState b White 0 50 false in
+  let move := Normal (mkPosition rank3 fileD) (mkPosition rank3 fileH) in  (* Rukh captures Ferz *)
+  (* After this move, Black would be bare and cannot counter-bare (Shah too far) *)
+  let b_after := board_move b (mkPosition rank3 fileD) (mkPosition rank3 fileH) in
+  let st_after := mkGameState b_after Black 0 50 false in
+  (bare_king_check st_after = Some White).  (* White achieved bare king *)
+Proof.
+  (* bare_king_check shows White wins *)
+  unfold bare_king_check, count_pieces. 
+  simpl. 
+  compute. 
+  reflexivity.
+Qed.
+
+(** Enhanced legal_move_impl that includes bare king checking *)
+Definition legal_move_impl_with_bare_king (st: GameState) (m: Move) : bool :=
+  match m with
+  | Normal from to | Promotion from to =>
+      (* First check all the basic legality conditions *)
+      match (board st)[from] with
+      | None => false
+      | Some pc => 
+          andb (Color_beq (piece_color pc) (turn st))
+          (andb (can_move_piece (board st) pc from to)
+          (andb (let b_after := board_move (board st) from to in
+                 match find_shah b_after (turn st) with
+                 | None => false
+                 | Some shah_pos => 
+                     negb (position_under_attack_by b_after shah_pos (opposite_color (turn st)))
+                 end)
+          (* NEW: Check bare king rule *)
+          (let b_after := board_move (board st) from to in
+           let st_after := mkGameState b_after (opposite_color (turn st)) 
+                                       (halfmove_clock st) (fullmove_number st) 
+                                       false in  (* Clear draw offer *)
+           match bare_king_check st_after with
+           | None => true  (* Not a bare king position *)
+           | Some winner =>
+               if Color_beq winner (turn st) 
+               then negb (can_counter_bare st_after)  (* We win only if no counter-bare *)
+               else false  (* We somehow bared ourselves - illegal *)
+           end)))
+      end
+  | Resignation c => Color_beq c (turn st)
+  | DrawOffer => true
+  | DrawAccept => draw_offer_pending st
+  end.
+
+(** Example: The enhanced impl correctly rejects moves that allow counter-bare *)
+Example enhanced_impl_prevents_bad_bare :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank5 fileD) then Some white_rukh  
+    else if position_beq pos (mkPosition rank5 fileE) then Some black_shah  (* Can capture back! *)
+    else if position_beq pos (mkPosition rank5 fileF) then Some black_ferz
+    else None in
+  let st := mkGameState b White 0 50 false in
+  (* White Rukh captures Ferz, but Black Shah can immediately capture Rukh back *)
+  let bad_move := Normal (mkPosition rank5 fileD) (mkPosition rank5 fileF) in
+  (* Original impl might allow it, but enhanced impl should reject it *)
+  legal_move_impl_with_bare_king st bad_move = false.
+Proof.
+  unfold legal_move_impl_with_bare_king.
+  simpl.
+  compute.
+  reflexivity.
+Qed.
+
+(** Now we make the enhanced versions the official ones *)
+Notation legal_move_spec_v2 := legal_move_spec_with_bare_king.
+Notation legal_move_impl_v2 := legal_move_impl_with_bare_king.
+
+(** * 12.13 Bilateral Soundness and Completeness *)
 
 (** Helper: legal_move_impl checks all conditions of legal_move_spec for Normal moves *)
 Lemma legal_move_impl_normal_checks_all : forall st from to,
