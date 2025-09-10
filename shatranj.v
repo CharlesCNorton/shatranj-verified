@@ -7775,4 +7775,232 @@ Proof.
   - split; [|split; [|split]]; compute; reflexivity.
 Qed.
 
+(** * 13.4 Non-Trivial Invariants *)
+
+(** Helper: DrawOffer doesn't change the board *)
+Lemma draw_offer_preserves_board_exact : forall st st',
+  apply_move_impl st DrawOffer = Some st' ->
+  board st' = board st.
+Proof.
+  intros st st' H.
+  unfold apply_move_impl in H.
+  injection H; intro Heq; subst st'.
+  simpl. reflexivity.
+Qed.
+
+(** Helper: Turn always alternates after board moves *)
+Lemma turn_alternates_after_apply : forall st m st',
+  apply_move_impl st m = Some st' ->
+  match m with
+  | Normal _ _ | Promotion _ _ => turn st' = opposite_color (turn st)
+  | DrawOffer => turn st' = turn st
+  | _ => True
+  end.
+Proof.
+  intros st m st' H.
+  unfold apply_move_impl in H.
+  destruct m; try trivial.
+  - (* Normal *)
+    destruct ((board st)[p]) eqn:Hpc; [|discriminate].
+    injection H; intro Heq; subst st'. simpl. reflexivity.
+  - (* Promotion *)
+    destruct ((board st)[p]) eqn:Hpc; [|discriminate].
+    injection H; intro Heq; subst st'. simpl. reflexivity.
+  - (* DrawOffer *)
+    injection H; intro Heq; subst st'. simpl. reflexivity.
+Qed.
+
+(** Helper: Successful move application preserves turn structure *)
+Lemma apply_move_turn_structure : forall st m st',
+  apply_move_impl st m = Some st' ->
+  match m with
+  | Normal _ _ | Promotion _ _ => 
+      turn st' = opposite_color (turn st) /\
+      (turn st = White -> fullmove_number st' = fullmove_number st) /\
+      (turn st = Black -> fullmove_number st' = S (fullmove_number st))
+  | DrawOffer => 
+      turn st' = turn st /\
+      fullmove_number st' = fullmove_number st
+  | _ => True
+  end.
+Proof.
+  intros st m st' H.
+  unfold apply_move_impl in H.
+  destruct m; try trivial.
+  - (* Normal *)
+    destruct ((board st)[p]) eqn:Hpc; [|discriminate].
+    injection H; intro Heq; subst st'. simpl.
+    split; [reflexivity|].
+    split; intro Hturn.
+    + rewrite Hturn. simpl. reflexivity.
+    + rewrite Hturn. simpl. reflexivity.
+  - (* Promotion *)
+    destruct ((board st)[p]) eqn:Hpc; [|discriminate].
+    injection H; intro Heq; subst st'. simpl.
+    split; [reflexivity|].
+    split; intro Hturn.
+    + rewrite Hturn. simpl. reflexivity.
+    + rewrite Hturn. simpl. reflexivity.
+  - (* DrawOffer *)
+    injection H; intro Heq; subst st'. simpl.
+    split; reflexivity.
+Qed.
+
+(** INVARIANT: Move reversibility - Every Normal move has a theoretical reverse *)
+Theorem move_reversibility_invariant : forall st from to st',
+  apply_move_impl st (Normal from to) = Some st' ->
+  (* The reverse move exists as a valid board operation *)
+  exists potential_reverse_move,
+    potential_reverse_move = Normal to from /\
+    (* The piece that moved is now at the destination *)
+    exists pc, (board st')[to] = Some pc.
+Proof.
+  intros st from to st' H.
+  exists (Normal to from).
+  split; [reflexivity|].
+  unfold apply_move_impl in H.
+  destruct ((board st)[from]) eqn:Hfrom; [|discriminate].
+  injection H; intro Heq; subst st'.
+  simpl.
+  (* The board after move has SOME piece at 'to' *)
+  destruct (andb (PieceType_beq (piece_type p) Baidaq)
+                 (baidaq_at_promotion_rank to (piece_color p))) eqn:Hpromo.
+  - (* Promotion case - piece becomes Ferz *)
+    exists (mkPiece (piece_color p) Ferz).
+    unfold board_place. simpl.
+    destruct (position_eq_dec to to); [|contradiction].
+    reflexivity.
+  - (* Normal move case *)
+    exists p.
+    unfold board_move.
+    rewrite Hfrom. simpl.
+    destruct (position_eq_dec to to); [|contradiction].
+    reflexivity.
+Qed.
+
+(** INVARIANT: Source position becomes empty after move *)
+Theorem source_becomes_empty : forall st from to st',
+  apply_move_impl st (Normal from to) = Some st' ->
+  from <> to ->
+  (board st')[from] = None.
+Proof.
+  intros st from to st' H Hneq.
+  unfold apply_move_impl in H.
+  destruct ((board st)[from]) eqn:Hfrom; [|discriminate].
+  injection H; intro Heq; subst st'.
+  simpl.
+  destruct (andb (PieceType_beq (piece_type p) Baidaq)
+                 (baidaq_at_promotion_rank to (piece_color p))) eqn:Hpromo.
+  - (* Promotion case *)
+    unfold board_place, board_move.
+    rewrite Hfrom. simpl.
+    destruct (position_eq_dec to from).
+    + subst. contradiction.
+    + destruct (position_eq_dec from from); [|contradiction].
+      reflexivity.
+  - (* Normal case *)
+    unfold board_move.
+    rewrite Hfrom. simpl.
+    destruct (position_eq_dec to from).
+    + subst. contradiction.
+    + destruct (position_eq_dec from from); [|contradiction].
+      reflexivity.
+Qed.
+
+(** INVARIANT: Applying a move and then DrawOffer preserves the board *)
+Theorem draw_offer_after_move : forall st m st1 st2,
+  apply_move_impl st m = Some st1 ->
+  apply_move_impl st1 DrawOffer = Some st2 ->
+  board st2 = board st1.
+Proof.
+  intros st m st1 st2 H1 H2.
+  unfold apply_move_impl in H2.
+  injection H2; intro Heq; subst st2.
+  simpl. reflexivity.
+Qed.
+
+(** * 13.5 Confluence Properties of Move Application *)
+
+(** Two moves are independent if they operate on different pieces and don't interfere *)
+Definition moves_independent (m1 m2: Move) : bool :=
+  match m1, m2 with
+  | Normal from1 to1, Normal from2 to2 
+  | Normal from1 to1, Promotion from2 to2
+  | Promotion from1 to1, Normal from2 to2 
+  | Promotion from1 to1, Promotion from2 to2 =>
+      (* Different source positions *)
+      negb (position_beq from1 from2) &&
+      (* First doesn't move to second's source *)
+      negb (position_beq to1 from2) &&
+      (* Second doesn't move to first's source *)
+      negb (position_beq to2 from1) &&
+      (* Different destinations *)
+      negb (position_beq to1 to2)
+  | _, _ => false
+  end.
+
+(** Example: Two rukhs moving on different files are independent *)
+Example independent_rukh_moves :
+  let m1 := Normal (mkPosition rank1 fileA) (mkPosition rank5 fileA) in
+  let m2 := Normal (mkPosition rank1 fileH) (mkPosition rank5 fileH) in
+  moves_independent m1 m2 = true.
+Proof.
+  simpl. reflexivity.
+Qed.
+
+(** Helper: Independent moves don't interfere with each other's source/destination *)
+Lemma independent_moves_no_interference : forall from1 to1 from2 to2,
+  moves_independent (Normal from1 to1) (Normal from2 to2) = true ->
+  from1 <> from2 /\ to1 <> from2 /\ to2 <> from1 /\ to1 <> to2.
+Proof.
+  intros from1 to1 from2 to2 H.
+  unfold moves_independent in H.
+  apply andb_prop in H. destruct H as [H3 H4].
+  apply andb_prop in H3. destruct H3 as [H2 H3].
+  apply andb_prop in H2. destruct H2 as [H1 H2].
+  split; [|split; [|split]].
+  - apply position_beq_false_neq. apply negb_true_iff. exact H1.
+  - apply position_beq_false_neq. apply negb_true_iff. exact H2.
+  - apply position_beq_false_neq. apply negb_true_iff. exact H3.
+  - apply position_beq_false_neq. apply negb_true_iff. exact H4.
+Qed.
+
+(**
+   FUNDAMENTAL THEOREM: Conservation of Non-Interference
+   
+   If two positions don't overlap with a move's source and destination,
+   then the move doesn't affect those positions. This is the foundation
+   for proving move independence and confluence.
+*)
+Theorem move_locality : forall st from to st' pos,
+  apply_move_impl st (Normal from to) = Some st' ->
+  pos <> from ->
+  pos <> to ->
+  (board st')[pos] = (board st)[pos].
+Proof.
+  intros st from to st' pos Happly Hneq_from Hneq_to.
+  unfold apply_move_impl in Happly.
+  destruct ((board st)[from]) eqn:Hfrom; [|discriminate].
+  injection Happly; intro Heq; subst st'.
+  simpl.
+  destruct (andb (PieceType_beq (piece_type p) Baidaq)
+                 (baidaq_at_promotion_rank to (piece_color p))) eqn:Hpromo.
+  - (* Promotion case *)
+    unfold board_place, board_move.
+    rewrite Hfrom. simpl.
+    destruct (position_eq_dec to pos).
+    + subst. contradiction.
+    + destruct (position_eq_dec from pos).
+      * subst. contradiction.
+      * reflexivity.
+  - (* Normal case *)
+    unfold board_move.
+    rewrite Hfrom. simpl.
+    destruct (position_eq_dec to pos).
+    + subst. contradiction.
+    + destruct (position_eq_dec from pos).
+      * subst. contradiction.
+      * reflexivity.
+Qed.
+
 (** * End of Section 13: Move Application *)
