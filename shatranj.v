@@ -8221,3 +8221,230 @@ Proof.
 Qed.
 
 (** * End of Section 13: Move Application *)
+
+(* ========================================================================= *)
+(* SECTION 14: MOVE GENERATION                                              *)
+(* ========================================================================= *)
+
+(** * 14.1 Basic Move Generation for Individual Pieces *)
+
+(** Generate all possible Shah moves from a position (not checking legality) *)
+Definition generate_shah_moves (b: Board) (c: Color) (from: Position) : list Move :=
+  map (fun to => Normal from to)
+      (filter (fun to => shah_move_impl b c from to) enum_position).
+
+(** Example: Shah in center has 8 possible moves on empty board *)
+Example shah_center_moves :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileE) then Some white_shah
+    else None in
+  let moves := generate_shah_moves b White (mkPosition rank4 fileE) in
+  (* Shah at e4 can move to 8 adjacent squares *)
+  List.length moves = 8.
+Proof.
+  compute. reflexivity.
+Qed.
+
+(** Generate all possible Ferz moves from a position *)
+Definition generate_ferz_moves (b: Board) (c: Color) (from: Position) : list Move :=
+  map (fun to => Normal from to)
+      (filter (fun to => ferz_move_impl b c from to) enum_position).
+
+(** Example: Ferz in center has 4 possible diagonal moves on empty board *)
+Example ferz_center_moves :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileE) then Some white_ferz
+    else None in
+  let moves := generate_ferz_moves b White (mkPosition rank4 fileE) in
+  (* Ferz at e4 can move to 4 diagonal squares *)
+  List.length moves = 4.
+Proof.
+  compute. reflexivity.
+Qed.
+
+(** Generate all possible Alfil moves from a position *)
+Definition generate_alfil_moves (b: Board) (c: Color) (from: Position) : list Move :=
+  map (fun to => Normal from to)
+      (filter (fun to => alfil_move_impl b c from to) enum_position).
+
+(** Generate all possible Faras (Knight) moves from a position *)
+Definition generate_faras_moves (b: Board) (c: Color) (from: Position) : list Move :=
+  map (fun to => Normal from to)
+      (filter (fun to => faras_move_impl b c from to) enum_position).
+
+(** Generate all possible Rukh moves from a position *)
+Definition generate_rukh_moves (b: Board) (c: Color) (from: Position) : list Move :=
+  map (fun to => Normal from to)
+      (filter (fun to => rukh_move_impl b c from to) enum_position).
+
+(** Generate all possible Baidaq moves from a position, including promotions *)
+Definition generate_baidaq_moves (b: Board) (c: Color) (from: Position) : list Move :=
+  let valid_destinations := filter (fun to => baidaq_move_impl b c from to) enum_position in
+  flat_map (fun to =>
+    if baidaq_at_promotion_rank to c 
+    then [Promotion from to; Normal from to]  (* Generate both for compatibility *)
+    else [Normal from to]      (* Regular move *)
+  ) valid_destinations.
+
+(** Example: Baidaq on 7th rank generates Promotion move *)
+Example baidaq_promotion_generation :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
+    else None in
+  let moves := generate_baidaq_moves b White (mkPosition rank7 fileE) in
+  (* Baidaq at e7 moving to e8 must be a Promotion move *)
+  In (Promotion (mkPosition rank7 fileE) (mkPosition rank8 fileE)) moves.
+Proof.
+  simpl. left. reflexivity.
+Qed.
+
+(** * 14.2 Pseudo-legal Move Generation *)
+
+(** Generate all pseudo-legal moves for a piece at a position *)
+Definition generate_piece_moves (b: Board) (pc: Piece) (from: Position) : list Move :=
+  let c := piece_color pc in
+  match piece_type pc with
+  | Shah => generate_shah_moves b c from
+  | Ferz => generate_ferz_moves b c from
+  | Alfil => generate_alfil_moves b c from
+  | Faras => generate_faras_moves b c from
+  | Rukh => generate_rukh_moves b c from
+  | Baidaq => generate_baidaq_moves b c from
+  end.
+
+(** Generate all pseudo-legal moves for the current player *)
+Definition generate_pseudo_legal_moves (st: GameState) : list Move :=
+  flat_map (fun pos =>
+    match (board st)[pos] with
+    | None => []
+    | Some pc =>
+        if Color_beq (piece_color pc) (turn st)
+        then generate_piece_moves (board st) pc pos
+        else []
+    end
+  ) enum_position.
+
+(** * 14.3 Legal Move Generation *)
+
+(** Main move generation function - generates all legal moves *)
+Definition generate_moves_impl (st: GameState) : list Move :=
+  filter (fun m => legal_move_impl st m) (generate_pseudo_legal_moves st).
+
+(** Example: Initial position has legal moves *)
+Example initial_position_has_moves :
+  let moves := generate_moves_impl initial_game_state in
+  List.length moves = 16.  (* 8 Baidaq moves + 8 piece moves *)
+Proof.
+  compute. reflexivity.
+Qed.
+
+(** * 14.4 Completeness Validation - Required by Spec *)
+
+(** Helper: Baidaq moves are either Normal (not promotion) or Promotion (at promotion) *)
+Lemma baidaq_move_generation_cases : forall b c from to,
+  baidaq_move_impl b c from to = true ->
+  In (if baidaq_at_promotion_rank to c then Promotion from to else Normal from to)
+     (generate_baidaq_moves b c from).
+Proof.
+  intros b c from to Hmove.
+  unfold generate_baidaq_moves.
+  apply in_flat_map.
+  exists to.
+  split.
+  - apply filter_In.
+    split.
+    + apply enum_position_complete.
+    + exact Hmove.
+  - simpl.
+    destruct (baidaq_at_promotion_rank to c).
+    + left. reflexivity.
+    + left. reflexivity.
+Qed.
+
+(** Helper: Normal moves are in the pseudo-legal list *)
+Lemma normal_move_in_pseudo_legal : forall st from to,
+  legal_move_impl st (Normal from to) = true ->
+  In (Normal from to) (generate_pseudo_legal_moves st).
+Proof.
+  intros st from to Hlegal.
+  unfold generate_pseudo_legal_moves.
+  apply in_flat_map.
+  exists from.
+  split.
+  - apply enum_position_complete.
+  - unfold legal_move_impl in Hlegal.
+    destruct ((board st)[from]) as [pc|] eqn:Hpc.
+    + apply andb_prop in Hlegal.
+      destruct Hlegal as [Hcolor Hrest].
+      simpl.
+      rewrite Color_beq_eq in Hcolor.
+      rewrite <- Hcolor.
+      rewrite Color_beq_refl.
+      unfold generate_piece_moves.
+      apply andb_prop in Hrest.
+      destruct Hrest as [Hcan _].
+      destruct (piece_type pc) eqn:Htype.
+      *
+        unfold generate_shah_moves.
+        apply in_map.
+        apply filter_In.
+        split.
+        -- apply enum_position_complete.
+        -- unfold can_move_piece in Hcan.
+           rewrite Htype in Hcan.
+           exact Hcan.
+      *
+        unfold generate_ferz_moves.
+        apply in_map.
+        apply filter_In.
+        split.
+        -- apply enum_position_complete.
+        -- unfold can_move_piece in Hcan.
+           rewrite Htype in Hcan.
+           exact Hcan.
+      *
+        unfold generate_alfil_moves.
+        apply in_map.
+        apply filter_In.
+        split.
+        -- apply enum_position_complete.
+        -- unfold can_move_piece in Hcan.
+           rewrite Htype in Hcan.
+           exact Hcan.
+      *
+        unfold generate_faras_moves.
+        apply in_map.
+        apply filter_In.
+        split.
+        -- apply enum_position_complete.
+        -- unfold can_move_piece in Hcan.
+           rewrite Htype in Hcan.
+           exact Hcan.
+      *
+        unfold generate_rukh_moves.
+        apply in_map.
+        apply filter_In.
+        split.
+        -- apply enum_position_complete.
+        -- unfold can_move_piece in Hcan.
+           rewrite Htype in Hcan.
+           exact Hcan.
+      *
+        unfold generate_baidaq_moves.
+        apply in_flat_map.
+        exists to.
+        split.
+        -- apply filter_In.
+           split.
+           ++ apply enum_position_complete.
+           ++ unfold can_move_piece in Hcan.
+              rewrite Htype in Hcan.
+              exact Hcan.
+        -- simpl.
+           destruct (baidaq_at_promotion_rank to (piece_color pc)) eqn:Hprom.
+           ++ right. left. reflexivity.
+           ++ left. reflexivity.
+    + discriminate.
+Qed.
+
+(** * End of Section 14: Move Generation *)
