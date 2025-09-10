@@ -9008,6 +9008,133 @@ Proof.
   - discriminate.
 Qed.
 
+(** Helper: Check if a position contains a Shah of given color *)
+Definition has_shah_of_color (b: Board) (pos: Position) (c: Color) : bool :=
+  match b[pos] with
+  | Some pc => andb (Color_beq (piece_color pc) c)
+                    (PieceType_beq (piece_type pc) Shah)
+  | None => false
+  end.
+
+(** Helper: board_move at position other than from/to is unchanged *)
+Lemma board_move_other_unchanged : forall b from to pos,
+  pos <> from ->
+  pos <> to ->
+  (board_move b from to)[pos] = b[pos].
+Proof.
+  intros b from to pos Hneq_from Hneq_to.
+  unfold board_move.
+  destruct (b[from]).
+  - simpl.
+    destruct (position_eq_dec to pos).
+    + subst. contradiction.
+    + destruct (position_eq_dec from pos).
+      * subst. contradiction.
+      * reflexivity.
+  - reflexivity.
+Qed.
+
+(** Helper: board_move places the moving piece at destination *)
+Lemma board_move_at_destination : forall b from to pc,
+  from <> to ->
+  b[from] = Some pc ->
+  (board_move b from to)[to] = Some pc.
+Proof.
+  intros b from to pc Hneq Hfrom.
+  unfold board_move.
+  rewrite Hfrom.
+  simpl.
+  destruct (position_eq_dec to to).
+  - reflexivity.
+  - contradiction.
+Qed.
+
+(** Helper: board_move clears the source position *)
+Lemma board_move_at_source : forall b from to pc,
+  from <> to ->
+  b[from] = Some pc ->
+  (board_move b from to)[from] = None.
+Proof.
+  intros b from to pc Hneq Hfrom.
+  unfold board_move.
+  rewrite Hfrom.
+  simpl.
+  destruct (position_eq_dec to from).
+  - subst. contradiction.
+  - destruct (position_eq_dec from from).
+    + reflexivity.
+    + contradiction.
+Qed.
+
+(** Helper: Moving non-Shah doesn't affect Shah count *)
+Lemma board_move_non_shah_preserves_count : forall b from to c pc,
+  b[from] = Some pc ->
+  piece_type pc <> Shah ->
+  (forall captured, b[to] = Some captured -> piece_type captured <> Shah) ->
+  shah_count (board_move b from to) c = shah_count b c.
+Proof.
+  intros b from to c pc Hfrom Hnot_shah Hno_shah_at_to.
+  unfold shah_count, count_piece_type_on_board.
+  f_equal.
+  apply filter_ext.
+  intros pos.
+  destruct (position_eq_dec pos from) as [Heq_from|Hneq_from].
+  - subst pos.
+    destruct (position_eq_dec from to) as [Heq|Hneq].
+    + subst to.
+      unfold board_move. rewrite Hfrom. simpl.
+      destruct (position_eq_dec from from).
+      * reflexivity.
+      * contradiction.
+    + rewrite board_move_at_source with (pc:=pc); try assumption.
+      simpl.
+      rewrite Hfrom.
+      simpl.
+      destruct (Color_beq (piece_color pc) c); simpl.
+      * destruct (PieceType_beq (piece_type pc) Shah) eqn:Hshah.
+        -- apply PieceType_beq_eq in Hshah. contradiction.
+        -- reflexivity.
+      * reflexivity.
+  - destruct (position_eq_dec pos to) as [Heq_to|Hneq_to].
+    + subst pos.
+      destruct (position_eq_dec from to) as [Heq_from_to|Hneq_from_to].
+      * subst to. contradiction.
+      * rewrite board_move_at_destination with (pc:=pc); try assumption.
+        destruct (b[to]) as [captured|] eqn:Hto.
+        -- simpl.
+           assert (piece_type captured <> Shah) by (apply Hno_shah_at_to; reflexivity).
+           assert (piece_type pc <> Shah) by assumption.
+           destruct (Color_beq (piece_color pc) c) eqn:Hpc_color;
+           destruct (Color_beq (piece_color captured) c) eqn:Hcap_color;
+           destruct (PieceType_beq (piece_type pc) Shah) eqn:Hpc_shah;
+           destruct (PieceType_beq (piece_type captured) Shah) eqn:Hcap_shah;
+           try (apply PieceType_beq_eq in Hpc_shah; contradiction);
+           try (apply PieceType_beq_eq in Hcap_shah; contradiction);
+           reflexivity.
+        -- simpl.
+           assert (piece_type pc <> Shah) by assumption.
+           destruct (Color_beq (piece_color pc) c);
+           destruct (PieceType_beq (piece_type pc) Shah) eqn:Hshah;
+           try (apply PieceType_beq_eq in Hshah; contradiction);
+           reflexivity.
+    + rewrite board_move_other_unchanged; try assumption.
+      reflexivity.
+Qed.
+
+(** Example: Moving a Ferz doesn't change Shah count *)
+Example ferz_move_preserves_shah_count :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank2 fileD) then Some white_ferz
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else None in
+  let b' := board_move b (mkPosition rank2 fileD) (mkPosition rank3 fileE) in
+  shah_count b White = 1 /\
+  shah_count b Black = 1 /\
+  shah_count b' White = 1 /\
+  shah_count b' Black = 1.
+Proof.
+  simpl. split; [|split; [|split]]; reflexivity.
+Qed.
 
 (** * End of Section 15: Game Tree Properties *)
-  
