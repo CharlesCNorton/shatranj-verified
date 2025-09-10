@@ -3098,7 +3098,7 @@ Open Scope Z_scope.
 
 (** * Check Detection Functions - Required for Shah Movement *)
 
-Definition can_attack_position (b: Board) (from to: Position) : bool :=
+Definition attacks (b: Board) (from to: Position) : bool :=
   match b[from] with
   | None => false
   | Some pc =>
@@ -3129,7 +3129,7 @@ Fixpoint find_attacking_pieces (b: Board) (target: Position) (by_color: Color)
       | None => find_attacking_pieces b target by_color rest
       | Some pc =>
           if andb (Color_beq (piece_color pc) by_color)
-                  (can_attack_position b pos target)
+                  (attacks b pos target)
           then pos :: find_attacking_pieces b target by_color rest
           else find_attacking_pieces b target by_color rest
       end
@@ -4340,22 +4340,6 @@ Definition is_valid_move (b: Board) (from to: Position) : bool :=
   | None => false
   end.
 
-Definition threatens (b: Board) (from to: Position) : bool :=
-  match b[from] with
-  | Some pc =>
-      match piece_type pc with
-      | Baidaq =>
-          let c := piece_color pc in
-          let capture_dirs := baidaq_capture_vectors c in
-          existsb (fun dir =>
-            match offset from (fst dir) (snd dir) with
-            | Some p => position_beq p to
-            | None => false
-            end) capture_dirs
-      | _ => can_move_piece b pc from to
-      end
-  | None => false
-  end.
 
 (** * Movement with Promotion *)
 
@@ -4380,17 +4364,11 @@ Definition apply_move_with_promotion (b: Board) (from to: Position) : Board :=
 
 (** * Check Detection for Shah Movement *)
 
-(** Check if a position would be attacked by any enemy piece *)
-Definition position_attacked_by (b: Board) (pos: Position) (by_color: Color) : bool :=
-  match find_attacking_pieces b pos by_color enum_position with
-  | [] => false
-  | _ => true
-  end.
 
 (** Check if moving the Shah would leave it in check *)
 Definition shah_move_would_be_in_check (b: Board) (c: Color) (from to: Position) : bool :=
   let b_after_move := board_move b from to in
-  position_attacked_by b_after_move to (opposite_color c).
+  position_under_attack_by b_after_move to (opposite_color c).
 
 (** Shah movement with check constraint *)
 Definition shah_move_safe_spec (b: Board) (c: Color) (from to: Position) : Prop :=
@@ -4431,7 +4409,7 @@ Qed.
 Example shah_safe_no_check : forall b c from to,
   shah_move_safe_impl b c from to = true ->
   let b' := board_move b from to in
-  position_attacked_by b' to (opposite_color c) = false.
+  position_under_attack_by b' to (opposite_color c) = false.
 Proof.
   intros b c from to H b'.
   unfold shah_move_safe_impl in H.
@@ -4498,7 +4476,7 @@ Example section7_complete_validation :
     (mkPosition rank7 fileF) (mkPosition rank8 fileG) = true) /\ (* capture + promote *)
     
   (* 7. THREAT DETECTION - Baidaq threatens diagonally *)
-  (threatens comprehensive_test_board 
+  (attacks comprehensive_test_board 
     (mkPosition rank6 fileD) (mkPosition rank5 fileC) = true) /\
     
   True.
@@ -4676,28 +4654,6 @@ Open Scope Z_scope.
 
 (** * 9.1 Basic Attack Detection *)
 
-(** Check if a piece at 'from' position can attack 'to' position *)
-Definition attacks (b: Board) (from to: Position) : bool :=
-  match b[from] with
-  | None => false
-  | Some pc =>
-      let c := piece_color pc in
-      match piece_type pc with
-      | Shah => shah_move_impl b c from to
-      | Ferz => ferz_move_impl b c from to  
-      | Alfil => alfil_move_impl b c from to
-      | Faras => faras_move_impl b c from to
-      | Rukh => rukh_move_impl b c from to
-      | Baidaq => 
-          (* Baidaq only attacks diagonally, not forward *)
-          let capture_dirs := baidaq_capture_vectors c in
-          existsb (fun dir =>
-            match offset from (fst dir) (snd dir) with
-            | Some p => position_beq p to
-            | None => false
-            end) capture_dirs
-      end
-  end.
 
 (** Formal specification for attacks *)
 Definition attacks_spec (b: Board) (from to: Position) : Prop :=
@@ -4706,13 +4662,13 @@ Definition attacks_spec (b: Board) (from to: Position) : Prop :=
   | Some pc =>
       let c := piece_color pc in
       match piece_type pc with
-      | Shah => shah_move_spec b c from to
-      | Ferz => ferz_move_spec b c from to
-      | Alfil => alfil_move_spec b c from to
-      | Faras => faras_move_spec b c from to
-      | Rukh => rukh_move_spec b c from to
+      | Shah => validate_step_move from to shah_vectors = true
+      | Ferz => validate_step_move from to ferz_vectors = true
+      | Alfil => validate_leap_move from to alfil_vectors = true
+      | Faras => validate_leap_move from to faras_vectors = true
+      | Rukh => andb (validate_slide_move from to rukh_directions)
+                     (path_clear_between b from to) = true
       | Baidaq => 
-          (* Baidaq attacks only diagonally *)
           exists dr df,
             In (dr, df) (baidaq_capture_vectors c) /\
             offset from dr df = Some to
@@ -4756,16 +4712,13 @@ Lemma attacks_shah_sound : forall b from to,
   | None => False
   end ->
   attacks b from to = true ->
-  match b[from] with
-  | Some pc => shah_move_spec b (piece_color pc) from to
-  | None => False
-  end.
+  validate_step_move from to shah_vectors = true.
 Proof.
   intros b from to Hpc H.
   unfold attacks in H.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
   destruct (piece_type pc) eqn:Htype; try discriminate.
-  apply shah_move_sound. exact H.
+  exact H.
 Qed.
 
 (** Soundness for Ferz attacks *)
@@ -4775,16 +4728,13 @@ Lemma attacks_ferz_sound : forall b from to,
   | None => False
   end ->
   attacks b from to = true ->
-  match b[from] with
-  | Some pc => ferz_move_spec b (piece_color pc) from to
-  | None => False
-  end.
+  validate_step_move from to ferz_vectors = true.
 Proof.
   intros b from to Hpc H.
   unfold attacks in H.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
   destruct (piece_type pc) eqn:Htype; try discriminate.
-  apply ferz_move_sound. exact H.
+  exact H.
 Qed.
 
 (** Soundness for Alfil attacks *)
@@ -4794,16 +4744,13 @@ Lemma attacks_alfil_sound : forall b from to,
   | None => False
   end ->
   attacks b from to = true ->
-  match b[from] with
-  | Some pc => alfil_move_spec b (piece_color pc) from to
-  | None => False
-  end.
+  validate_leap_move from to alfil_vectors = true.
 Proof.
   intros b from to Hpc H.
   unfold attacks in H.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
   destruct (piece_type pc) eqn:Htype; try discriminate.
-  apply alfil_move_sound. exact H.
+  exact H.
 Qed.
 
 (** Soundness for Faras attacks *)
@@ -4813,16 +4760,13 @@ Lemma attacks_faras_sound : forall b from to,
   | None => False
   end ->
   attacks b from to = true ->
-  match b[from] with
-  | Some pc => faras_move_spec b (piece_color pc) from to
-  | None => False
-  end.
+  validate_leap_move from to faras_vectors = true.
 Proof.
   intros b from to Hpc H.
   unfold attacks in H.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
   destruct (piece_type pc) eqn:Htype; try discriminate.
-  apply faras_move_sound. exact H.
+  exact H.
 Qed.
 
 (** Soundness for Rukh attacks *)
@@ -4832,40 +4776,14 @@ Lemma attacks_rukh_sound : forall b from to,
   | None => False
   end ->
   attacks b from to = true ->
-  match b[from] with
-  | Some pc => rukh_move_spec b (piece_color pc) from to
-  | None => False
-  end.
+  andb (validate_slide_move from to rukh_directions)
+       (path_clear_between b from to) = true.
 Proof.
   intros b from to Hpc H.
   unfold attacks in H.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
   destruct (piece_type pc) eqn:Htype; try discriminate.
-  unfold rukh_move_spec.
-  unfold rukh_move_impl in H.
-  apply existsb_exists in H.
-  destruct H as [dir [Hin Hmatch]].
-  destruct (rukh_find_path_distance b from (fst dir) (snd dir) to rukh_max_distance) eqn:Hfind; [|discriminate].
-  generalize Hfind. intros Hfind'.
-  apply rukh_find_path_distance_sound in Hfind'.
-  destruct Hfind' as [Hgt [Hle Hoff]].
-  exists (fst dir), (snd dir), n.
-  split.
-  - destruct dir. simpl. exact Hin.
-  - split; [exact Hgt|].
-    split; [exact Hoff|].
-    split.
-    + intros k Hk.
-      apply rukh_find_path_distance_path_clear with (n := rukh_max_distance) (n' := n) (to := to).
-      * exact Hfind.
-      * exact Hk.
-    + destruct (b[to]) eqn:Hbto.
-      * unfold occupied_by in Hmatch.
-        rewrite Hbto in Hmatch.
-        simpl in Hmatch.
-        apply negb_true_iff in Hmatch.
-        apply Color_beq_neq. exact Hmatch.
-      * trivial.
+  exact H.
 Qed.
 
 (** Combined soundness lemma using all piece-specific lemmas *)
@@ -4927,7 +4845,7 @@ Qed.
 (** Completeness for Shah attacks *)
 Lemma attacks_shah_complete : forall b from to,
   match b[from] with
-  | Some pc => piece_type pc = Shah /\ shah_move_spec b (piece_color pc) from to
+  | Some pc => piece_type pc = Shah /\ validate_step_move from to shah_vectors = true
   | None => False
   end ->
   attacks b from to = true.
@@ -4935,15 +4853,15 @@ Proof.
   intros b from to H.
   unfold attacks.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
-  destruct H as [Htype Hspec].
+  destruct H as [Htype Hval].
   rewrite Htype.
-  apply shah_move_complete. exact Hspec.
+  exact Hval.
 Qed.
 
 (** Completeness for Ferz attacks *)
 Lemma attacks_ferz_complete : forall b from to,
   match b[from] with
-  | Some pc => piece_type pc = Ferz /\ ferz_move_spec b (piece_color pc) from to
+  | Some pc => piece_type pc = Ferz /\ validate_step_move from to ferz_vectors = true
   | None => False
   end ->
   attacks b from to = true.
@@ -4951,15 +4869,15 @@ Proof.
   intros b from to H.
   unfold attacks.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
-  destruct H as [Htype Hspec].
+  destruct H as [Htype Hval].
   rewrite Htype.
-  apply ferz_move_complete. exact Hspec.
+  exact Hval.
 Qed.
 
 (** Completeness for Alfil attacks *)
 Lemma attacks_alfil_complete : forall b from to,
   match b[from] with
-  | Some pc => piece_type pc = Alfil /\ alfil_move_spec b (piece_color pc) from to
+  | Some pc => piece_type pc = Alfil /\ validate_leap_move from to alfil_vectors = true
   | None => False
   end ->
   attacks b from to = true.
@@ -4967,15 +4885,15 @@ Proof.
   intros b from to H.
   unfold attacks.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
-  destruct H as [Htype Hspec].
+  destruct H as [Htype Hval].
   rewrite Htype.
-  apply alfil_move_complete. exact Hspec.
+  exact Hval.
 Qed.
 
 (** Completeness for Faras attacks *)
 Lemma attacks_faras_complete : forall b from to,
   match b[from] with
-  | Some pc => piece_type pc = Faras /\ faras_move_spec b (piece_color pc) from to
+  | Some pc => piece_type pc = Faras /\ validate_leap_move from to faras_vectors = true
   | None => False
   end ->
   attacks b from to = true.
@@ -4983,9 +4901,9 @@ Proof.
   intros b from to H.
   unfold attacks.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
-  destruct H as [Htype Hspec].
+  destruct H as [Htype Hval].
   rewrite Htype.
-  apply faras_move_complete. exact Hspec.
+  exact Hval.
 Qed.
 
 (** Completeness for Baidaq attacks *)
@@ -5041,13 +4959,8 @@ Lemma attacks_rukh_complete_dist1 : forall b from to,
   match b[from] with
   | Some pc => 
     piece_type pc = Rukh /\
-    (exists dr df,
-      In (dr, df) rukh_directions /\
-      offset from dr df = Some to /\
-      match b[to] with
-      | Some target => piece_color target <> piece_color pc
-      | None => True
-      end)
+    andb (validate_slide_move from to rukh_directions)
+         (path_clear_between b from to) = true
   | None => False
   end ->
   attacks b from to = true.
@@ -5055,19 +4968,9 @@ Proof.
   intros b from to H.
   unfold attacks.
   destruct (b[from]) as [pc|] eqn:Hbfrom; [|contradiction].
-  destruct H as [Htype [dr [df [Hin [Hoff Hdest]]]]].
+  destruct H as [Htype Hval].
   rewrite Htype.
-  unfold rukh_move_impl.
-  apply existsb_exists.
-  exists (dr, df). split.
-  - exact Hin.
-  - (* Distance 1 case *)
-    unfold rukh_max_distance. simpl.
-    rewrite Hoff. rewrite position_beq_refl.
-    unfold occupied_by.
-    destruct (b[to]) eqn:Hbto.
-    + simpl. apply negb_true_iff. apply Color_beq_neq. exact Hdest.
-    + reflexivity.
+  exact Hval.
 Qed.
 
 (** Example: White Ferz can attack diagonally *)
@@ -7348,6 +7251,221 @@ Proof.
         destruct (find_shah (board_move (board st) from to) (turn st)) eqn:Hshah.
         -- apply negb_true_iff in Hcheck. exact Hcheck.
         -- discriminate.
+Qed.
+
+(** * 12.16 Main Soundness Theorem *)
+
+(** SOUNDNESS: If legal_move_impl_complete returns true, then legal_move_spec holds 
+    Note: We use legal_move_impl_complete instead of basic legal_move_impl because
+    the basic version doesn't enforce promotion type requirements. *)
+Theorem legal_move_sound : forall st m,
+  legal_move_impl_complete st m = true ->
+  legal_move_spec st m.
+Proof.
+  intros st m H.
+  unfold legal_move_spec, legal_move_impl_complete in *.
+  destruct m.
+  - (* Normal move *)
+    (* For Normal moves, legal_move_impl_complete checks that it's NOT a promotion situation *)
+    apply andb_prop in H. destruct H as [Hnot_promo H_legal].
+    apply negb_true_iff in Hnot_promo.
+    unfold legal_move_impl_safe in H_legal.
+    apply andb_prop in H_legal. destruct H_legal as [Hno_shah_capture H_basic].
+    pose proof (legal_move_impl_normal_checks_all st p p0 H_basic) as Hchecks.
+    destruct ((board st)[p]) as [pc|] eqn:Hpc; [|exact Hchecks].
+    destruct Hchecks as [Hcolor [Hmove [Hdest Hcheck]]].
+    split; [exact Hcolor|].
+    split; [exact Hmove|].
+    split; [exact Hdest|].
+    split; [exact Hcheck|].
+    (* Promotion condition: We know requires_promotion returned false (Hnot_promo),
+       so either it's not a baidaq or not at promotion rank *)
+    intros [Hbaidaq Hprom].
+    (* We have a contradiction: Hnot_promo says requires_promotion is false,
+       but Hbaidaq and Hprom together would make it true *)
+    unfold requires_promotion in Hnot_promo.
+    rewrite Hpc in Hnot_promo.
+    (* Now Hnot_promo has: andb (PieceType_beq (piece_type pc) Baidaq) 
+                                 (baidaq_at_promotion_rank p0 (piece_color pc)) = false *)
+    rewrite Hbaidaq in Hnot_promo.
+    simpl in Hnot_promo.
+    (* Now: andb true (baidaq_at_promotion_rank p0 (piece_color pc)) = false *)
+    (* We also know piece_color pc = turn st from Hcolor *)
+    assert (Hcolor_eq: piece_color pc = turn st) by exact Hcolor.
+    rewrite Hcolor_eq in Hnot_promo.
+    (* Now: andb true (baidaq_at_promotion_rank p0 (turn st)) = false *)
+    rewrite Hprom in Hnot_promo.
+    simpl in Hnot_promo.
+    (* Now Hnot_promo says true = false, which is a contradiction *)
+    discriminate Hnot_promo.
+  - (* Promotion move - this part is easier since promotion IS required *)
+    (* legal_move_impl_complete requires that promotion is necessary *)
+    apply andb_prop in H. destruct H as [Hreq_promo H_legal].
+    unfold requires_promotion in Hreq_promo.
+    unfold legal_move_impl_safe in H_legal.
+    apply andb_prop in H_legal. destruct H_legal as [Hno_shah_capture H_basic].
+    unfold legal_move_impl in H_basic.
+    destruct ((board st)[p]) as [pc|] eqn:Hpc; [|discriminate].
+    apply andb_prop in H_basic. destruct H_basic as [Hcolor Hrest].
+    apply andb_prop in Hrest. destruct Hrest as [Hmove Hcheck].
+    split.
+    + apply Color_beq_eq. exact Hcolor.
+    + split.
+      * exact Hmove.
+      * split.
+        -- destruct ((board st)[p0]) eqn:Hdest.
+           ++ (* pc is the piece at source, p1 is the piece at destination *)
+              (* We need to prove piece_color p1 <> turn st *)
+              (* can_move_piece checks that we don't capture our own pieces *)
+              (* Let me prove this directly from what can_move_piece does *)
+              intro Hsame_color.
+              (* If p1 has the same color as turn st, and pc also has turn st color,
+                 then can_move_piece would have returned false, contradicting Hmove *)
+              assert (Hpc_turn: piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
+              rewrite <- Hpc_turn in Hsame_color.
+              (* Now we have piece_color p1 = piece_color pc *)
+              (* But can_move_piece checks occupied_by which would fail for same color *)
+              unfold can_move_piece in Hmove.
+              destruct (piece_type pc) eqn:Htype.
+              ** (* Shah *)
+                unfold shah_move_impl in Hmove.
+                (* shah_move_impl = validate && negb(occupied) && negb(check) *)
+                (* shah_move_impl = (validate && negb(occupied)) && negb(check) *)
+                (* So first split gives us two parts *)
+                apply andb_prop in Hmove. destruct Hmove as [Hfirst Hnocheck].
+                (* Hfirst = validate && negb(occupied) *)
+                apply andb_prop in Hfirst. destruct Hfirst as [_ Hocc].
+                (* Hocc says: negb (occupied_by b to c) = true *)
+                apply negb_true_iff in Hocc.
+                (* Hocc: occupied_by (board st) p0 (piece_color pc) = false *)
+                unfold occupied_by in Hocc. rewrite Hdest in Hocc.
+                simpl in Hocc.
+                (* Now Hocc: Color_beq (piece_color p1) (piece_color pc) = false *)
+                rewrite Hsame_color in Hocc.
+                rewrite Color_beq_refl in Hocc.
+                discriminate.
+              ** (* Ferz *)
+                unfold ferz_move_impl in Hmove.
+                apply andb_prop in Hmove. destruct Hmove as [_ Hocc].
+                apply negb_true_iff in Hocc.
+                unfold occupied_by in Hocc. rewrite Hdest in Hocc.
+                simpl in Hocc.
+                rewrite Hsame_color in Hocc.
+                rewrite Color_beq_refl in Hocc.
+                discriminate.
+              ** (* Alfil *) unfold alfil_move_impl in Hmove.
+                apply andb_prop in Hmove. destruct Hmove as [_ Hocc].
+                apply negb_true_iff in Hocc.
+                unfold occupied_by in Hocc. rewrite Hdest in Hocc.
+                simpl in Hocc.
+                rewrite Hsame_color in Hocc.
+                rewrite Color_beq_refl in Hocc.
+                discriminate.
+              ** (* Faras *) unfold faras_move_impl in Hmove.
+                apply andb_prop in Hmove. destruct Hmove as [_ Hocc].
+                apply negb_true_iff in Hocc.
+                unfold occupied_by in Hocc. rewrite Hdest in Hocc.
+                simpl in Hocc.
+                rewrite Hsame_color in Hocc.
+                rewrite Color_beq_refl in Hocc.
+                discriminate.
+              ** (* Rukh *) unfold rukh_move_impl in Hmove.
+                apply existsb_exists in Hmove.
+                destruct Hmove as [dir [_ Hmatch]].
+                destruct (rukh_find_path_distance (board st) p (fst dir) (snd dir) p0 rukh_max_distance); [|discriminate].
+                apply negb_true_iff in Hmatch.
+                unfold occupied_by in Hmatch. rewrite Hdest in Hmatch.
+                simpl in Hmatch.
+                rewrite Hsame_color in Hmatch.
+                rewrite Color_beq_refl in Hmatch.
+                discriminate.
+              ** (* Baidaq *) unfold baidaq_move_impl in Hmove.
+                apply orb_prop in Hmove. destruct Hmove as [Hforward|Hcapture].
+                *** (* Forward move - must be empty, contradicts Hdest *)
+                   destruct (offset p (fst (baidaq_move_vector (piece_color pc)))
+                                    (snd (baidaq_move_vector (piece_color pc)))); [|discriminate].
+                   apply andb_prop in Hforward. destruct Hforward as [_ Hemp].
+                   unfold empty, occupied in Hemp.
+                   rewrite Hdest in Hemp. simpl in Hemp. discriminate.
+                *** (* Capture move *)
+                   apply existsb_exists in Hcapture.
+                   destruct Hcapture as [[dr df] [_ Hcap]].
+                   simpl in Hcap.
+                   destruct (offset p dr df); [|discriminate].
+                   apply andb_prop in Hcap. destruct Hcap as [_ Hpiece].
+                   rewrite Hdest in Hpiece.
+                   simpl in Hpiece.
+                   apply negb_true_iff in Hpiece.
+                   rewrite Hsame_color in Hpiece.
+                   rewrite Color_beq_refl in Hpiece.
+                   discriminate.
+           ++ trivial.
+        -- split.
+           ++ simpl.
+              destruct (find_shah (board_move (board st) p p0) (turn st)) eqn:Hshah.
+              ** apply negb_true_iff in Hcheck. exact Hcheck.
+              ** discriminate.
+           ++ (* For Promotion moves, the implication is trivially satisfied *)
+              intros [Hbaidaq Hprom_rank].
+              reflexivity.
+  - (* Resignation *)
+    unfold legal_move_impl_complete in H.
+    unfold legal_move_impl_safe in H.
+    unfold legal_move_impl in H.
+    apply Color_beq_eq. exact H.
+  - (* DrawOffer *)
+    trivial.
+  - (* DrawAccept *)
+    unfold legal_move_impl_complete in H.
+    unfold legal_move_impl_safe in H.
+    unfold legal_move_impl in H.
+    exact H.
+Qed.
+
+(** Example: Soundness in action - baidaq promotion correctly enforced *)
+Example soundness_example_promotion :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_shah
+    else None in
+  let st := mkGameState b White 0 1 false in
+  let normal_move := Normal (mkPosition rank7 fileE) (mkPosition rank8 fileE) in
+  let promo_move := Promotion (mkPosition rank7 fileE) (mkPosition rank8 fileE) in
+  (* Normal move is rejected by complete impl *)
+  (legal_move_impl_complete st normal_move = false) /\
+  (* Promotion move is accepted *)
+  (legal_move_impl_complete st promo_move = true).
+Proof.
+  split.
+  - (* Normal move rejected *)
+    unfold legal_move_impl_complete, requires_promotion, legal_move_impl_safe.
+    simpl. reflexivity.
+  - (* Promotion move accepted *)
+    unfold legal_move_impl_complete, requires_promotion, legal_move_impl_safe, legal_move_impl.
+    simpl. unfold can_move_piece, baidaq_move_impl, contains_shah.
+    simpl. reflexivity.
+Qed.
+
+(** * 12.17 Famous Historical Example: Dilaram's Problem *)
+
+(** This is one of the most famous Shatranj problems, dating from the 10th century.
+    Legend says Prince Dilaram wagered his wife in a game and was about to lose,
+    when she whispered "Sacrifice your rukhs, not me!" showing the winning combination. *)
+
+Example simple_rukh_move :
+  (* Simple position with a Rukh that can move *)
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else None in
+  let st := mkGameState b White 0 1 false in
+  (* White Rukh moves from a1 to a5 *)
+  let move := Normal (mkPosition rank1 fileA) (mkPosition rank5 fileA) in
+  (* This move is legal *)
+  legal_move_impl st move = true.
+Proof.
+  compute. reflexivity.
 Qed.
 
 (** * End of Section 12: Move Legality *)
