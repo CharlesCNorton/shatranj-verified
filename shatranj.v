@@ -8830,4 +8830,77 @@ Proof.
     apply (Hpromo from to eq_refl).
 Qed.
 
+(** * 14.7 Validation: All Generated Moves are Legal *)
+
+(** Helper: General property of filter *)
+Lemma filter_preserves_predicate : forall (A : Type) (f : A -> bool) (l : list A) (x : A),
+  In x (filter f l) -> f x = true.
+Proof.
+  intros A f l.
+  induction l as [|h t IH].
+  - (* Empty list *)
+    intros x Hx.
+    simpl in Hx.
+    apply False_ind.
+    exact Hx.
+  - (* Cons *)
+    intros x Hx.
+    simpl in Hx.
+    destruct (f h) eqn:Hfh.
+    + (* h passes filter *)
+      simpl in Hx.
+      destruct Hx as [Heq | Ht].
+      * (* x = h *)
+        subst x.
+        exact Hfh.
+      * (* x in tail *)
+        apply IH.
+        exact Ht.
+    + (* h doesn't pass filter *)
+      apply IH.
+      exact Hx.
+Qed.
+
+(** Theorem: Every move generated is legal - abstract version *)  
+Theorem all_generated_moves_legal : forall st m,
+  In m (generate_moves_impl st) -> 
+  legal_move_impl st m = true.
+Proof.
+  intros st m Hin.
+  unfold generate_moves_impl in Hin.
+  exact (@filter_preserves_predicate 
+           Move
+           (fun x => legal_move_impl st x)
+           (generate_pseudo_legal_moves st)
+           m
+           Hin).
+Qed.
+
+(** Specialization: Every move generated from initial position is legal *)
+Theorem all_initial_moves_legal :
+  forall m, In m (generate_moves_impl initial_game_state) -> 
+            legal_move_impl initial_game_state m = true.
+Proof.
+  apply all_generated_moves_legal.
+Qed.
+
+(** Example: Specific move legality check without full generation *)
+Example baidaq_e2e3_legal_directly :
+  legal_move_impl initial_game_state 
+    (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE)) = true.
+Proof.
+  (* Direct computation of this specific move's legality *)
+  reflexivity.
+Qed.
+
+(** Corollary: The theorem guarantees this for all generated moves *)
+Corollary generated_implies_legal : forall m,
+  In m (generate_moves_impl initial_game_state) ->
+  legal_move_impl initial_game_state m = true.
+Proof.
+  (* This is exactly our theorem *)
+  exact all_initial_moves_legal.
+Qed.
+
 (** * End of Section 14: Move Generation *)
+  
