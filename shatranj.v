@@ -8282,7 +8282,7 @@ Definition generate_baidaq_moves (b: Board) (c: Color) (from: Position) : list M
   let valid_destinations := filter (fun to => baidaq_move_impl b c from to) enum_position in
   flat_map (fun to =>
     if baidaq_at_promotion_rank to c 
-    then [Promotion from to; Normal from to]  (* Generate both for compatibility *)
+    then [Promotion from to]  (* Only promotion - mandatory in Shatranj *)
     else [Normal from to]      (* Regular move *)
   ) valid_destinations.
 
@@ -8361,12 +8361,15 @@ Proof.
     + left. reflexivity.
 Qed.
 
-(** Helper: Normal moves are in the pseudo-legal list *)
+(** Helper: Normal moves are in the pseudo-legal list when not a mandatory promotion *)
 Lemma normal_move_in_pseudo_legal : forall st from to,
   legal_move_impl st (Normal from to) = true ->
+  (forall pc, (board st)[from] = Some pc -> 
+    piece_type pc = Baidaq -> 
+    baidaq_at_promotion_rank to (piece_color pc) = false) ->
   In (Normal from to) (generate_pseudo_legal_moves st).
 Proof.
-  intros st from to Hlegal.
+  intros st from to Hlegal Hnotprom.
   unfold generate_pseudo_legal_moves.
   apply in_flat_map.
   exists from.
@@ -8442,9 +8445,65 @@ Proof.
               exact Hcan.
         -- simpl.
            destruct (baidaq_at_promotion_rank to (piece_color pc)) eqn:Hprom.
-           ++ right. left. reflexivity.
+           ++ exfalso. 
+              specialize (Hnotprom pc (eq_refl) Htype).
+              rewrite Hprom in Hnotprom.
+              discriminate Hnotprom.
            ++ left. reflexivity.
     + discriminate.
+Qed.
+
+(** Example: Baidaq at promotion rank only generates Promotion move, not Normal *)
+Example baidaq_promotion_exclusive :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
+    else None in
+  let moves := generate_baidaq_moves b White (mkPosition rank7 fileE) in
+  (In (Promotion (mkPosition rank7 fileE) (mkPosition rank8 fileE)) moves) /\
+  (~In (Normal (mkPosition rank7 fileE) (mkPosition rank8 fileE)) moves).
+Proof.
+  unfold generate_baidaq_moves.
+  simpl.
+  split.
+  - left. reflexivity.
+  - intro H. simpl in H. destruct H as [H|H]; [discriminate | exact H].
+Qed.
+
+(** REQUIRED BY SPEC: All legal Normal moves are in generated list *)
+Example gen_captures_all_legal_normal: forall st from to,
+  WellFormedState st = true ->
+  legal_move_impl st (Normal from to) = true ->
+  (forall pc, (board st)[from] = Some pc -> 
+    piece_type pc = Baidaq -> 
+    baidaq_at_promotion_rank to (piece_color pc) = false) ->
+  In (Normal from to) (generate_moves_impl st).
+Proof.
+  intros st from to Hwf Hlegal Hnotprom.
+  unfold generate_moves_impl.
+  apply filter_In.
+  split.
+  - apply (normal_move_in_pseudo_legal st from to Hlegal Hnotprom).
+  - exact Hlegal.
+Qed.
+
+(** Concrete example: Initial position generates expected baidaq moves *)
+Example initial_baidaq_e2e3_generated :
+  let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  In move (generate_moves_impl initial_game_state).
+Proof.
+  unfold generate_moves_impl.
+  apply filter_In.
+  split.
+  - unfold generate_pseudo_legal_moves.
+    apply in_flat_map.
+    exists (mkPosition rank2 fileE).
+    split.
+    + apply enum_position_complete.
+    + simpl. 
+      unfold generate_piece_moves, generate_baidaq_moves.
+      simpl.
+      left. reflexivity.
+  - compute. reflexivity.
 Qed.
 
 (** * End of Section 14: Move Generation *)
