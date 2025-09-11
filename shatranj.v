@@ -9977,5 +9977,23 @@ Proof.
   apply le_n.
 Qed.
 
+(** Theorem: Non-board-altering moves preserve well-formedness *)
+Theorem non_board_moves_preserve_wf : forall st m st',
+  well_formed_state st ->
+  apply_move_impl st m = Some st' ->
+  (forall from to, m <> Normal from to) ->
+  (forall from to, m <> Promotion from to) ->
+  well_formed_state st'.
+Proof.
+  intros st m st' Hwf Happly Hnot_normal Hnot_promotion.
+  destruct m.
+  - exfalso. apply (Hnot_normal p p0). reflexivity.
+  - exfalso. apply (Hnot_promotion p p0). reflexivity.
+  - unfold apply_move_impl in Happly. discriminate.
+  - unfold apply_move_impl in Happly. 
+    injection Happly; intro; subst st'. simpl. exact Hwf.
+  - unfold apply_move_impl in Happly. discriminate.
+Qed.
+
+
 (** * End of Section 15: Game Tree Properties *)
-  
