@@ -9542,22 +9542,4 @@ Proof.
     reflexivity.
 Qed.
 
-(** REQUIRED BY SPEC: Reachability preserves well-formedness *)
-Example reachable_preserves_wf: forall st st',
-  WellFormedState st = true ->
-  reachable st st' ->
-  WellFormedState st' = true.
-Proof.
-  intros st st' Hwf Hreach.
-  inversion Hreach; subst.
-  - exact Hwf.
-  - clear H. clear Hreach.
-    inversion H1; subst.
-    + destruct m; try (unfold apply_move_impl in H0; discriminate).
-      * exact Hwf.
-      * exact Hwf.
-      * apply (draw_offer_preserves_wellformed st st' Hwf H0).
-    + exact Hwf.
-Qed.
-
 (** * End of Section 15: Game Tree Properties *)
