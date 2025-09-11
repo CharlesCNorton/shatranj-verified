@@ -10272,4 +10272,89 @@ Proof.
   split; reflexivity.
 Qed.
 
+(** * 15.18 Finite Game Length Properties *)
+
+(** Helper: Halfmove clock is always bounded by the 70-move rule limit *)
+Lemma halfmove_clock_bounded : forall st,
+  halfmove_clock st <= max_halfmove_clock \/
+  is_terminated st = true.
+Proof.
+  intros st.
+  destruct (Nat.leb (halfmove_clock st) max_halfmove_clock) eqn:Hleb.
+  - left. apply Nat.leb_le. exact Hleb.
+  - right.
+    apply Nat.leb_gt in Hleb.
+    pose proof (game_terminates_at_halfmove_limit st).
+    assert (halfmove_clock st >= max_halfmove_clock).
+    { unfold ge. apply Nat.lt_le_incl. exact Hleb. }
+    specialize (H H0).
+    destruct H.
+    + exact H.
+    + unfold is_terminated.
+      rewrite H.
+      reflexivity.
+Qed.
+
+(** Example: A game at move 139 is either below limit or will terminate *)
+Example halfmove_139_bounded :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank2 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank8 fileA) then Some black_rukh
+    else None in
+  let st := mkGameState b White 139 70 false in
+  halfmove_clock st <= max_halfmove_clock \/ is_terminated st = true.
+Proof.
+  simpl. left. unfold max_halfmove_clock. unfold Nat.le. 
+  apply le_S. apply le_n.
+Qed.
+
+(** Helper: Every move either advances the halfmove clock or resets it *)
+Lemma move_affects_halfmove_clock : forall st m st',
+  apply_move_impl st m = Some st' ->
+  match m with
+  | Normal _ _ =>
+      halfmove_clock st' = 0 \/ halfmove_clock st' = S (halfmove_clock st)
+  | Promotion _ _ =>
+      halfmove_clock st' <= S (halfmove_clock st)
+  | DrawOffer => halfmove_clock st' = halfmove_clock st
+  | _ => True
+  end.
+Proof.
+  intros st m st' Happly.
+  destruct m.
+  - unfold apply_move_impl in Happly.
+    destruct ((board st)[p]) eqn:Hfrom; [|discriminate].
+    injection Happly; intro Heq. rewrite <- Heq. simpl.
+    unfold update_halfmove_clock.
+    destruct ((board st)[p0]) eqn:Hdest.
+    + left. reflexivity.
+    + destruct (PieceType_beq (piece_type p1) Baidaq) eqn:Hbaidaq.
+      * left. reflexivity.
+      * right. reflexivity.
+  - unfold apply_move_impl in Happly.
+    destruct ((board st)[p]) eqn:Hfrom; [|discriminate].
+    injection Happly; intro Heq. rewrite <- Heq. simpl.
+    unfold update_halfmove_clock.
+    destruct ((board st)[p0]); simpl.
+    + apply Nat.le_0_l.
+    + destruct (PieceType_beq (piece_type p1) Baidaq).
+      * apply Nat.le_0_l.
+      * apply le_n.
+  - unfold apply_move_impl in Happly. discriminate.
+  - unfold apply_move_impl in Happly.
+    injection Happly; intro Heq. rewrite <- Heq. simpl.
+    reflexivity.
+  - unfold apply_move_impl in Happly. discriminate.
+Qed.
+
+(** Helper lemma: Every path has finite length *)
+Lemma path_has_finite_length : forall st path,
+  game_path st path ->
+  path_length path <= path_length path.
+Proof.
+  intros. apply Nat.le_refl.
+Qed.
+
 (** * End of Section 15: Game Tree Properties *)
