@@ -9372,4 +9372,102 @@ Proof.
   - compute. reflexivity.
 Qed.
 
+(** * 15.5 Helper Lemmas for Well-Formedness *)
+
+(** Helper: Legal moves using safe implementation never capture Shah *)
+Lemma legal_move_no_shah_capture : forall st from to,
+  legal_move_impl_safe st (Normal from to) = true ->
+  forall pc, (board st)[to] = Some pc ->
+  piece_type pc <> Shah.
+Proof.
+  intros st from to Hlegal pc Hto.
+  unfold legal_move_impl_safe in Hlegal.
+  apply andb_prop in Hlegal. destruct Hlegal as [Hno_shah _].
+  apply negb_true_iff in Hno_shah.
+  unfold contains_shah in Hno_shah.
+  rewrite Hto in Hno_shah.
+  simpl in Hno_shah.
+  intro Hshah.
+  rewrite Hshah in Hno_shah. simpl in Hno_shah.
+  discriminate.
+Qed.
+
+(** Example: Rukh cannot legally capture Shah even if physically possible *)
+Example rukh_cannot_capture_shah_legally :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank1 fileH) then Some black_shah
+    else if position_beq pos (mkPosition rank8 fileE) then Some white_shah
+    else None in
+  let st := mkGameState b White 0 1 false in
+  let capture_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileH) in
+  (* The move would be rejected by legal_move_impl_safe *)
+  legal_move_impl_safe st capture_move = false.
+Proof.
+  compute. reflexivity.
+Qed.
+
+(** Helper: DrawOffer doesn't change Shah count *)
+Lemma draw_offer_preserves_shah_count : forall st st' c,
+  apply_move_impl st DrawOffer = Some st' ->
+  shah_count (board st') c = shah_count (board st) c.
+Proof.
+  intros st st' c Happly.
+  unfold apply_move_impl in Happly.
+  injection Happly; intro; subst st'.
+  simpl. reflexivity.
+Qed.
+
+(** Helper: Initial position is well-formed *)
+Lemma initial_position_wellformed :
+  WellFormedState initial_game_state = true.
+Proof.
+  compute. reflexivity.
+Qed.
+
+(** Helper: PieceType equality decidable *)
+Lemma PieceType_eq_dec : forall (pt1 pt2: PieceType),
+  {pt1 = pt2} + {pt1 <> pt2}.
+Proof.
+  decide equality.
+Qed.
+
+(** Helper: Piece equality decidable *)
+Lemma Piece_eq_dec : forall (p1 p2: Piece),
+  {p1 = p2} + {p1 <> p2}.
+Proof.
+  decide equality.
+  - apply PieceType_eq_dec.
+  - apply Color_eq_dec.
+Qed.
+
+(** Helper: Option equality decidable *)
+Lemma option_eq_dec : forall A (A_eq_dec: forall x y: A, {x = y} + {x <> y}) 
+  (o1 o2: option A),
+  {o1 = o2} + {o1 <> o2}.
+Proof.
+  intros A A_eq_dec o1 o2.
+  destruct o1, o2.
+  - destruct (A_eq_dec a a0).
+    + left. subst. reflexivity.
+    + right. congruence.
+  - right. discriminate.
+  - right. discriminate.
+  - left. reflexivity.
+Qed.
+
+
+(** Helper: Specific e2-e3 move preserves well-formedness *)
+Lemma e2e3_preserves_wellformed :
+  forall st',
+  apply_move_impl initial_game_state 
+    (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE)) = Some st' ->
+  WellFormedState st' = true.
+Proof.
+  intros st' H.
+  compute in H.
+  injection H; intro; subst st'.
+  compute. reflexivity.
+Qed.
+
 (** * End of Section 15: Game Tree Properties *)
