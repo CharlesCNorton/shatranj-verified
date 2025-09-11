@@ -1,8 +1,8 @@
 (* ========================================================================= *)
-(* SHATRANJ FORMALIZATION - SECTION 1: FOUNDATIONS AND METATHEORY           *)
+(* SECTION 1: FOUNDATIONS AND METATHEORY                                    *)
 (* ========================================================================= *)
 
-(** * Core Imports *)
+(** * 1.1 Core Imports and Dependencies *)
 
 Require Import Coq.Program.Basics.
 Require Import Coq.Program.Tactics.
@@ -30,7 +30,7 @@ Open Scope Z_scope.
 Open Scope bool_scope.
 Open Scope string_scope.
 
-(** * Custom Tactics for Automation *)
+(** * 1.2 Custom Tactics for Proof Automation *)
 
 Ltac destruct_match :=
   match goal with
@@ -56,7 +56,7 @@ Ltac solve_decidability :=
   | [ |- decidable _ ] => unfold decidable; tauto
   end.
 
-(** * Setoid Infrastructure for Extensional Equality *)
+(** * 1.3 Setoid Infrastructure for Board Equality *)
 
 Definition eq_dec (A: Type) := forall (x y: A), {x = y} + {x <> y}.
 
@@ -64,14 +64,14 @@ Class DecidableEq (A: Type) := {
   dec_eq : eq_dec A
 }.
 
-(** * Proof Mode Configuration *)
+(** * 1.4 Proof Mode Configuration *)
 
 Set Implicit Arguments.
 Set Asymmetric Patterns.
 Set Bullet Behavior "Strict Subproofs".
 Set Default Goal Selector "!".
 
-(** * Basic Decidability Instances *)
+(** * 1.5 Decidability Instances *)
 
 #[global]
 Instance bool_decidable_eq : DecidableEq bool := {
@@ -88,7 +88,7 @@ Instance Z_decidable_eq : DecidableEq Z := {
   dec_eq := Z.eq_dec
 }.
 
-(** * Option Type Utilities *)
+(** * 1.6 Option Type Utilities *)
 
 Definition option_map2 {A B C: Type} (f: A -> B -> C) 
   (oa: option A) (ob: option B) : option C :=
@@ -105,27 +105,31 @@ Definition option_bind {A B: Type} (oa: option A) (f: A -> option B) : option B 
 
 Notation "ma >>= f" := (option_bind ma f) (at level 50, left associativity).
 
-(** * Function Extensionality Available *)
+(** * 1.7 Function Extensionality Axioms *)
 
+(** Function extensionality - pointwise equality implies functional equality *)
 Lemma fun_ext : forall {A B: Type} (f g: A -> B),
   (forall x, f x = g x) -> f = g.
 Proof.
   exact @functional_extensionality.
 Qed.
 
+(** Dependent function extensionality for type families *)
 Lemma fun_ext_dep : forall {A: Type} {B: A -> Type} (f g: forall x, B x),
   (forall x, f x = g x) -> f = g.
 Proof.
   exact @functional_extensionality_dep.
 Qed.
 
-(** * Classical Logic Axioms Available *)
+(** * 1.8 Classical Logic Axioms *)
 
+(** Classical law of excluded middle *)
 Lemma excluded_middle : forall P: Prop, P \/ ~P.
 Proof.
   exact classic.
 Qed.
 
+(** Choice principle - functional selection from total relations *)
 Lemma choice_axiom : forall (A B: Type) (R: A -> B -> Prop),
   (forall x, exists y, R x y) ->
   exists f: A -> B, forall x, R x (f x).
@@ -133,17 +137,18 @@ Proof.
   exact choice.
 Qed.
 
+(** Proof irrelevance - uniqueness of propositional evidence *)
 Lemma proof_irrelevance_axiom : forall (P: Prop) (p1 p2: P), p1 = p2.
 Proof.
   exact proof_irrelevance.
 Qed.
 
-(** * Helper for Program Definitions *)
+(** * 1.9 Program Definition Helpers *)
 
 #[global]
 Obligation Tactic := program_simpl; auto; try lia.
 
-(** * List Utilities *)
+(** * 1.10 List Utilities *)
 
 Fixpoint list_all {A: Type} (P: A -> bool) (l: list A) : bool :=
   match l with
@@ -157,6 +162,7 @@ Fixpoint list_any {A: Type} (P: A -> bool) (l: list A) : bool :=
   | x :: xs => P x || list_any P xs
   end.
 
+(** Characterization of universal quantification over list elements *)
 Lemma list_all_forall : forall {A: Type} (P: A -> bool) (l: list A),
   list_all P l = true <-> forall x, In x l -> P x = true.
 Proof.
@@ -175,6 +181,7 @@ Proof.
       * apply IHl. intros x Hin. apply H. right. exact Hin.
 Qed.
 
+(** Characterization of existential quantification over list elements *)
 Lemma list_any_exists : forall {A: Type} (P: A -> bool) (l: list A),
   list_any P l = true <-> exists x, In x l /\ P x = true.
 Proof.
@@ -194,7 +201,7 @@ Proof.
         exists x. split; assumption.
 Qed.
 
-(** * Error Handling Infrastructure *)
+(** * 1.11 Error Handling Infrastructure *)
 
 Inductive result (A: Type) : Type :=
   | Ok : A -> result A
@@ -211,12 +218,14 @@ Definition result_bind {A B: Type} (r: result A) (f: A -> result B) : result B :
 
 Notation "r >>? f" := (result_bind r f) (at level 50, left associativity).
 
-(** * Dependent Pair Utilities *)
+(** * 1.12 Dependent Pair Utilities *)
 
+(** First projection equality from dependent pair equality *)
 Definition sigT_eq1 {A: Type} {P: A -> Type} {x y: A} {px: P x} {py: P y}
   (H: existT P x px = existT P y py) : x = y :=
   f_equal (@projT1 A P) H.
 
+(** Second projection equality from dependent pair equality with equal indices *)
 Definition sigT_eq2 {A: Type} {P: A -> Type} {x: A} {px py: P x}
   (H: existT P x px = existT P x py) : px = py.
 Proof.
@@ -224,7 +233,7 @@ Proof.
   exact H.
 Qed.
 
-(** * Relation Utilities *)
+(** * 1.13 Relation Utilities *)
 
 Section Relations.
   Variable A : Type.
@@ -234,6 +243,7 @@ Section Relations.
     | rtc_refl : forall x, rtc x x
     | rtc_step : forall x y z, R x y -> rtc y z -> rtc x z.
 
+  (** Transitivity of reflexive transitive closure *)
   Lemma rtc_trans : forall x y z, rtc x y -> rtc y z -> rtc x z.
   Proof.
     intros x y z Hxy Hyz.
@@ -245,7 +255,7 @@ Section Relations.
   Definition functional := forall x, exists! y, R x y.
 End Relations.
 
-(** * Enhanced Tactics *)
+(** * 1.14 Enhanced Proof Tactics *)
 
 Ltac break_match :=
   match goal with
@@ -271,14 +281,16 @@ Ltac contradiction_eq :=
       assert (x <> y) by discriminate; contradiction
   end.
 
-(** * Common Proof Patterns *)
+(** * 1.15 Common Proof Patterns *)
 
+(** Injectivity of the Some constructor *)
 Lemma option_some_inv : forall {A: Type} (x y: A),
   Some x = Some y -> x = y.
 Proof.
   intros. injection H. auto.
 Qed.
 
+(** Characterization of successful monadic bind for options *)
 Lemma option_bind_some : forall {A B: Type} (ma: option A) (f: A -> option B) (b: B),
   (ma >>= f) = Some b ->
   exists a, ma = Some a /\ f a = Some b.
@@ -287,14 +299,16 @@ Proof.
   destruct ma; [eauto|discriminate].
 Qed.
 
+(** Boolean equality reflection via truth value equivalence *)
 Lemma bool_eq_reflect : forall b1 b2: bool,
   b1 = b2 <-> (b1 = true <-> b2 = true).
 Proof.
   intros. destruct b1, b2; intuition.
 Qed.
 
-(** * List Enhanced Utilities *)
+(** * 1.16 Enhanced List Utilities *)
 
+(** Specification of list element search with predicate *)
 Lemma list_find_spec : forall {A: Type} (P: A -> bool) (l: list A),
   match find P l with
   | Some x => In x l /\ P x = true
@@ -317,6 +331,7 @@ Fixpoint list_remove {A: Type} (dec: forall x y: A, {x = y} + {x <> y})
   | y :: ys => if dec x y then ys else y :: list_remove dec x ys
   end.
 
+(** Membership preservation under element removal *)
 Lemma list_remove_In : forall {A: Type} (dec: forall x y: A, {x = y} + {x <> y})
   (x y: A) (l: list A),
   In y (list_remove dec x l) -> In y l.
@@ -330,7 +345,7 @@ Proof.
       * right. apply IHl. assumption.
 Qed.
 
-(* The converse requires NoDup or a different specification *)
+(** Weak converse of removal - distinct elements remain after removal *)
 Lemma list_remove_In_weak : forall {A: Type} (dec: forall x y: A, {x = y} + {x <> y})
   (x y: A) (l: list A),
   In y l -> x <> y -> In y (list_remove dec x l).
@@ -346,8 +361,9 @@ Proof.
       * right. apply IHl; assumption.
 Qed.
 
-(** * Well-Founded Recursion Support *)
+(** * 1.17 Well-Founded Recursion Support *)
 
+(** Well-foundedness of measure-based ordering *)
 Definition measure_wf {A: Type} (f: A -> nat) : well_founded (fun x y => (f x < f y)%nat).
 Proof.
   unfold well_founded.
@@ -361,8 +377,9 @@ Proof.
   - reflexivity.
 Defined.
 
-(** * Finite Type Utilities (preview for Section 2) *)
+(** * 1.18 Finite Type Utilities *)
 
+(** Decidability of list membership given decidable equality *)
 Definition finite_dec {A: Type} (l: list A) (dec: forall x y: A, {x = y} + {x <> y}) :
   forall x: A, {In x l} + {~ In x l}.
 Proof.
@@ -377,8 +394,9 @@ Proof.
         -- contradiction.
 Defined.
 
-(** * Validation: Extended Example *)
+(** * 1.19 Validation Examples *)
 
+(** Associativity of monadic bind for option type *)
 Example option_bind_assoc : forall {A B C: Type} 
   (ma: option A) (f: A -> option B) (g: B -> option C),
   ((ma >>= f) >>= g) = (ma >>= (fun a => f a >>= g)).
@@ -391,19 +409,17 @@ Qed.
 Close Scope Z_scope.
 Close Scope bool_scope.
 
-(** * End of Section 1: Foundations and Metatheory *)
-
 (* ========================================================================= *)
-(* SECTION 2: FINITE DOMAIN THEORY                 *)
+(* SECTION 2: FINITE DOMAIN THEORY                                          *)
 (* ========================================================================= *)
 
 Open Scope nat_scope. 
 
-(** * Finite 8 Theory *)
+(** * 2.1 Finite 8 Type Definition *)
 
 Definition Fin8 := Fin.t 8.
 
-(** * Enumeration of Fin8 *)
+(** * 2.2 Enumeration of Fin8 *)
 
 Definition enum_fin8 : list Fin8 :=
   [Fin.F1; Fin.FS Fin.F1; Fin.FS (Fin.FS Fin.F1); 
@@ -413,7 +429,7 @@ Definition enum_fin8 : list Fin8 :=
    Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1)))));
    Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))))].
 
-(** * Conversion between Fin8 and nat *)
+(** * 2.3 Conversion Functions *)
 
 Definition fin8_to_nat (f: Fin8) : nat := proj1_sig (Fin.to_nat f).
 
@@ -431,6 +447,7 @@ Definition nat_to_fin8 (n: nat) (H: n < 8) : Fin8 :=
       match Nat.lt_irrefl _ (Nat.lt_le_trans _ _ _ H' (Nat.le_add_r 8 n8)) with end
   end H.
 
+(** Bounded conversion from Fin8 to natural numbers *)
 Lemma fin8_to_nat_bound : forall (f: Fin8), (fin8_to_nat f < 8)%nat.
 Proof.
   intro f. unfold fin8_to_nat.
@@ -449,81 +466,97 @@ Definition nat_to_fin8_aux (n: nat) : Fin8 :=
   | _ => Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))))
   end.
 
-(** * Decidable equality for Fin8 *)
+(** * 2.4 Decidable Equality Instance *)
 
 #[global]
 Instance fin8_decidable_eq : DecidableEq Fin8 := {
   dec_eq := Fin.eq_dec
 }.
 
-(** * Exhaustive enumeration theorem *)
+(** * 2.5 Exhaustive Enumeration Theorems *)
 
+(** First element membership in Fin8 enumeration *)
 Lemma fin8_F1_in_enum : In (@Fin.F1 7) enum_fin8.
 Proof. simpl. left. reflexivity. Qed.
 
+(** Second element membership in Fin8 enumeration *)
 Lemma fin8_FS_F1_in_enum : In (Fin.FS (@Fin.F1 6)) enum_fin8.
 Proof. simpl. right. left. reflexivity. Qed.
 
+(** Third element membership in Fin8 enumeration *)
 Lemma fin8_2_in_enum : In (Fin.FS (Fin.FS (@Fin.F1 5))) enum_fin8.
 Proof. simpl. do 2 right. left. reflexivity. Qed.
 
+(** Fourth element membership in Fin8 enumeration *)
 Lemma fin8_3_in_enum : In (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 4)))) enum_fin8.
 Proof. simpl. do 3 right. left. reflexivity. Qed.
 
+(** Fifth element membership in Fin8 enumeration *)
 Lemma fin8_4_in_enum : In (Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 3))))) enum_fin8.
 Proof. simpl. do 4 right. left. reflexivity. Qed.
 
+(** Sixth element membership in Fin8 enumeration *)
 Lemma fin8_5_in_enum : In (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 2)))))) enum_fin8.
 Proof. simpl. do 5 right. left. reflexivity. Qed.
 
+(** Seventh element membership in Fin8 enumeration *)
 Lemma fin8_6_in_enum : In (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 1))))))) enum_fin8.
 Proof. simpl. do 6 right. left. reflexivity. Qed.
 
+(** Eighth element membership in Fin8 enumeration *)
 Lemma fin8_7_in_enum : In (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 0)))))))) enum_fin8.
 Proof. simpl. do 7 right. left. reflexivity. Qed.
 
+(** Case analysis helper for first Fin8 element *)
 Lemma all_fin8_case_F1 : forall f: Fin8,
   f = @Fin.F1 7 -> In f enum_fin8.
 Proof.
   intros f Heq. rewrite Heq. apply fin8_F1_in_enum.
 Qed.
 
+(** Case analysis helper for second Fin8 element *)
 Lemma all_fin8_case_FS_F1 : forall f: Fin8,
   f = Fin.FS (@Fin.F1 6) -> In f enum_fin8.
 Proof.
   intros f Heq. rewrite Heq. apply fin8_FS_F1_in_enum.
 Qed.
 
+(** Case analysis helper for third Fin8 element *)
 Lemma all_fin8_case_2 : forall f: Fin8,
   f = Fin.FS (Fin.FS (@Fin.F1 5)) -> In f enum_fin8.
 Proof.
   intros f Heq. rewrite Heq. apply fin8_2_in_enum.
 Qed.
 
+(** Case analysis helper for fourth Fin8 element *)
 Lemma all_fin8_case_3 : forall f: Fin8,
   f = Fin.FS (Fin.FS (Fin.FS (@Fin.F1 4))) -> In f enum_fin8.
 Proof.
   intros f Heq. rewrite Heq. apply fin8_3_in_enum.
 Qed.
 
+(** Case analysis helper for fifth Fin8 element *)
 Lemma all_fin8_case_4 : forall f: Fin8,
   f = Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 3)))) -> In f enum_fin8.
 Proof.
   intros f Heq. rewrite Heq. apply fin8_4_in_enum.
 Qed.
 
+(** Case analysis helper for sixth Fin8 element *)
 Lemma all_fin8_case_5 : forall f: Fin8,
   f = Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 2))))) -> In f enum_fin8.
 Proof.
   intros f Heq. rewrite Heq. apply fin8_5_in_enum.
 Qed.
 
+(** Case analysis helper for seventh Fin8 element *)
 Lemma all_fin8_case_6 : forall f: Fin8,
   f = Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 1)))))) -> In f enum_fin8.
 Proof.
   intros f Heq. rewrite Heq. apply fin8_6_in_enum.
 Qed.
 
+(** Case analysis helper for eighth Fin8 element *)
 Lemma all_fin8_case_7 : forall f: Fin8,
   f = Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (@Fin.F1 0))))))) -> In f enum_fin8.
 Proof.
@@ -533,6 +566,7 @@ Qed.
 Ltac fin8_cases f :=
   repeat (destruct f as [|f]; [|]); [| inversion f].
 
+(** Completeness of Fin8 enumeration *)
 Lemma all_fin8_in_enumeration : forall f: Fin8, In f enum_fin8.
 Proof.
   intro f.
@@ -547,13 +581,14 @@ Proof.
   intro f8. inversion f8.
 Qed.
 
+(** Uniqueness of elements in Fin8 enumeration *)
 Lemma enum_fin8_NoDup : NoDup enum_fin8.
 Proof.
   unfold enum_fin8.
   repeat constructor; simpl; intuition discriminate.
 Qed.
 
-(** * Finite Type Class *)
+(** * 2.6 Finite Type Class *)
 
 Class Finite (A: Type) := {
   enum : list A;
@@ -561,7 +596,7 @@ Class Finite (A: Type) := {
   enum_nodup : NoDup enum
 }.
 
-(** * Finite instances *)
+(** * 2.7 Finite Type Instances *)
 
 #[global]
 Instance fin8_finite : Finite Fin8 := {
@@ -587,6 +622,7 @@ Instance unit_finite : Finite unit := {
   enum_nodup := ltac:(repeat constructor; simpl; intuition)
 }.
 
+(** Preservation of uniqueness under list concatenation with disjoint elements *)
 Lemma NoDup_app {A: Type} : forall (l1 l2: list A),
   NoDup l1 -> NoDup l2 -> 
   (forall x, In x l1 -> In x l2 -> False) ->
@@ -607,6 +643,7 @@ Proof.
       * exact Hy2.
 Qed.
 
+(** Uniqueness preservation under pairing with fixed first component *)
 Lemma NoDup_map_pair_l {A B: Type} : forall (a: A) (lb: list B),
   NoDup lb -> NoDup (map (fun b => (a, b)) lb).
 Proof.
@@ -621,6 +658,7 @@ Proof.
     + exact IHHnd.
 Qed.
 
+(** Disjointness of paired lists with distinct first components *)
 Lemma in_map_pair_disjoint {A B: Type} : forall (a1 a2: A) (lb: list B) (p: A * B),
   a1 <> a2 ->
   In p (map (fun b => (a1, b)) lb) ->
@@ -637,6 +675,7 @@ Proof.
   + simpl in H2. contradiction.
 Qed.
 
+(** Uniqueness preservation under injective mapping *)
 Lemma NoDup_map {A B: Type} : forall (f: A -> B) (l: list A),
   (forall x y, In x l -> In y l -> f x = f y -> x = y) ->
   NoDup l -> NoDup (map f l).
@@ -658,6 +697,7 @@ Proof.
       * right. auto.
 Qed.
 
+(** Uniqueness of Cartesian product from unique component lists *)
 Lemma NoDup_list_prod {A B: Type} : forall (la: list A) (lb: list B),
   NoDup la -> NoDup lb -> NoDup (list_prod la lb).
 Proof.
@@ -701,8 +741,9 @@ Proof.
       subst. discriminate.
 Defined.
 
-(** * Exhaustive case analysis *)
+(** * 2.8 Exhaustive Case Analysis *)
 
+(** Complete case analysis principle for Fin8 *)
 Lemma fin8_exhaustive : forall (f: Fin8) (P: Fin8 -> Prop),
   P Fin.F1 ->
   P (Fin.FS Fin.F1) ->
@@ -726,14 +767,17 @@ Proof.
   intro f8. inversion f8.
 Qed.
 
-(** * Bijection with bounded nat *)
+(** * 2.9 Bijection with Bounded Natural Numbers *)
 
+(** Forward bijection from Fin8 to bounded naturals *)
 Definition fin8_bij_nat (f: Fin8) : {n: nat | n < 8} :=
   exist _ (fin8_to_nat f) (fin8_to_nat_bound f).
 
+(** Inverse bijection from bounded naturals to Fin8 *)
 Definition nat_bij_fin8 (sn: {n: nat | n < 8}) : Fin8 :=
   nat_to_fin8_aux (proj1_sig sn).
 
+(** Round-trip property for nat-to-fin8 conversion *)
 Lemma nat_fin8_round_trip : forall n H,
   fin8_to_nat (@nat_to_fin8 n H) = n.
   Proof.
@@ -751,6 +795,7 @@ Lemma nat_fin8_round_trip : forall n H,
   - exfalso. simpl in H. lia.
 Qed.
 
+(** Inverse property of the Fin8 bijection *)
 Lemma fin8_bij_inv2 : forall sn,
   fin8_bij_nat (nat_bij_fin8 sn) = sn.
 Proof.
@@ -768,6 +813,7 @@ Proof.
   - exfalso. simpl in H. lia.
 Qed.
 
+(** Left inverse property of the Fin8 bijection *)
 Lemma fin8_bij_inv1 : forall f,
   nat_bij_fin8 (fin8_bij_nat f) = f.
 Proof.
@@ -777,23 +823,28 @@ Proof.
     (simpl; reflexivity).
 Qed.
 
-(** * Cardinality *)
+(** * 2.10 Cardinality of Finite Types *)
 
+(** Cardinality extraction for finite types *)
 Definition finite_card {A: Type} `{FA: Finite A} : nat := List.length (@enum A FA).
 
+(** Cardinality of Fin8 is exactly 8 *)
 Lemma fin8_card : @finite_card Fin8 _ = 8.
 Proof.
   unfold finite_card. simpl. reflexivity.
 Qed.
 
-(** * Decision procedures for finite types *)
+(** * 2.11 Decision Procedures for Finite Types *)
 
+(** Universal quantification decision procedure *)
 Definition finite_forall_dec {A: Type} `{Finite A} (P: A -> bool) : bool :=
   list_all P enum.
 
+(** Existential quantification decision procedure *)
 Definition finite_exists_dec {A: Type} `{Finite A} (P: A -> bool) : bool :=
   list_any P enum.
 
+(** Correctness of universal quantification decision *)
 Lemma finite_forall_dec_correct : forall {A: Type} `{Finite A} (P: A -> bool),
   finite_forall_dec P = true <-> forall x: A, P x = true.
 Proof.
@@ -803,6 +854,7 @@ Proof.
   - apply H0.
 Qed.
 
+(** Correctness of existential quantification decision *)
 Lemma finite_exists_dec_correct : forall {A: Type} `{Finite A} (P: A -> bool),
   finite_exists_dec P = true <-> exists x: A, P x = true.
 Proof.
@@ -812,16 +864,18 @@ Proof.
   - destruct H0 as [x HP]. exists x. split; [apply enum_complete|exact HP].
 Qed.
 
-(** * Validation Lemma *)
+(** * 2.12 Validation of Enumeration Completeness *)
 
+(** Validated completeness of Fin8 enumeration *)
 Lemma all_fin8_in_enumeration_validated : forall (f: Fin.t 8), 
   In f enum_fin8.
 Proof.
   exact all_fin8_in_enumeration.
 Qed.
 
-(** * Additional utilities for finite domains *)
+(** * 2.13 Predecessor and Successor Operations *)
 
+(** Predecessor function for Fin8 elements *)
 Definition fin8_pred (f: Fin8) : option Fin8 :=
   match fin8_to_nat f with
   | 0 => None
@@ -831,6 +885,7 @@ Definition fin8_pred (f: Fin8) : option Fin8 :=
             end
   end.
 
+(** Successor function for Fin8 elements *)
 Definition fin8_succ (f: Fin8) : option Fin8 :=
   let n := fin8_to_nat f in
   match lt_dec (S n) 8 with
@@ -844,9 +899,9 @@ Definition fin8_succ (f: Fin8) : option Fin8 :=
 (* SECTION 3: POSITION ABSTRACTION                                          *)
 (* ========================================================================= *)
 
-(** * Concrete Implementation of Position System *)
+(** * 3.1 Position System Implementation *)
 
-(** * Rank and File as wrapped Fin8 *)
+(** * 3.2 Rank and File Type Definitions *)
 
 Record Rank : Type := mkRank { 
   rank_val : Fin8 
@@ -861,8 +916,9 @@ Record Position : Type := mkPosition {
   pos_file : File
 }.
 
-(** * Decidable Equality Instances *)
+(** * 3.3 Decidable Equality for Position Components *)
 
+(** Decidability of rank equality *)
 Lemma rank_eq_dec : forall (r1 r2: Rank), {r1 = r2} + {r1 <> r2}.
 Proof.
   intros [v1] [v2].
@@ -871,6 +927,7 @@ Proof.
   - right. intro H. injection H. contradiction.
 Defined.
 
+(** Decidability of file equality *)
 Lemma file_eq_dec : forall (f1 f2: File), {f1 = f2} + {f1 <> f2}.
 Proof.
   intros [v1] [v2].
@@ -879,6 +936,7 @@ Proof.
   - right. intro H. injection H. contradiction.
 Defined.
 
+(** Decidability of position equality *)
 Lemma position_eq_dec : forall (p1 p2: Position), {p1 = p2} + {p1 <> p2}.
 Proof.
   intros [r1 f1] [r2 f2].
@@ -904,26 +962,30 @@ Instance position_decidable_eq : DecidableEq Position := {
   dec_eq := position_eq_dec
 }.
 
-(** * Construction/Destruction Properties *)
+(** * 3.4 Position Construction and Destruction Properties *)
 
+(** Eta-expansion property for positions *)
 Lemma pos_eta : forall p, 
   mkPosition (pos_rank p) (pos_file p) = p.
 Proof.
   intros [r f]. reflexivity.
 Qed.
 
+(** Beta-reduction for rank projection *)
 Lemma pos_beta_rank : forall r f, 
   pos_rank (mkPosition r f) = r.
 Proof.
   reflexivity.
 Qed.
 
+(** Beta-reduction for file projection *)
 Lemma pos_beta_file : forall r f, 
   pos_file (mkPosition r f) = f.
 Proof.
   reflexivity.
 Qed.
 
+(** Extensionality principle for positions *)
 Lemma position_ext : forall p1 p2,
   pos_rank p1 = pos_rank p2 ->
   pos_file p1 = pos_file p2 ->
@@ -932,7 +994,7 @@ Proof.
   intros [r1 f1] [r2 f2]. simpl. intros <- <-. reflexivity.
 Qed.
 
-(** * Concrete Rank Values *)
+(** * 3.5 Standard Rank Constants *)
 
 Definition rank1 : Rank := mkRank Fin.F1.
 Definition rank2 : Rank := mkRank (Fin.FS Fin.F1).
@@ -943,7 +1005,7 @@ Definition rank6 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1
 Definition rank7 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1)))))).
 Definition rank8 : Rank := mkRank (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))))).
 
-(** * Concrete File Values *)
+(** * 3.6 Standard File Constants *)
 
 Definition fileA : File := mkFile Fin.F1.
 Definition fileB : File := mkFile (Fin.FS Fin.F1).
@@ -954,7 +1016,7 @@ Definition fileF : File := mkFile (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1
 Definition fileG : File := mkFile (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1)))))).
 Definition fileH : File := mkFile (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS (Fin.FS Fin.F1))))))).
 
-(** * Coordinate Arithmetic *)
+(** * 3.7 Integer Coordinate System *)
 
 Open Scope Z_scope.
 
@@ -976,7 +1038,7 @@ Definition Z_to_file (z: Z) : option File :=
     Some (mkFile (nat_to_fin8_aux (Z.to_nat z)))
   else None.
 
-(** * Offset Function *)
+(** * 3.8 Position Offset Computation *)
 
 Definition offset (p: Position) (dr df: Z) : option Position :=
   let new_rank := rankZ p + dr in
@@ -986,8 +1048,9 @@ Definition offset (p: Position) (dr df: Z) : option Position :=
   | _, _ => None
   end.
 
-(** * Bounds Properties *)
+(** * 3.9 Coordinate Bounds Properties *)
 
+(** Rank coordinates are bounded in [0,8) *)
 Lemma rankZ_bounds : forall p, 0 <= rankZ p < 8.
 Proof.
   intro p. unfold rankZ.
@@ -997,6 +1060,7 @@ Proof.
   - lia.
 Qed.
 
+(** File coordinates are bounded in [0,8) *)
 Lemma fileZ_bounds : forall p, 0 <= fileZ p < 8.
 Proof.
   intro p. unfold fileZ.
@@ -1008,6 +1072,7 @@ Qed.
 
 (** * Offset Properties *)
 
+(** Identity property of zero offset *)
 Lemma offset_zero : forall p,
   offset p 0 0 = Some p.
 Proof.
@@ -1037,6 +1102,7 @@ Proof.
       (simpl; reflexivity).
 Qed.
 
+(** Inverse property of position offset *)
 Lemma offset_inverse : forall p dr df p',
   offset p dr df = Some p' ->
   offset p' (-dr) (-df) = Some p.
@@ -1359,7 +1425,7 @@ Proof.
     + apply enum_file_NoDup.
 Qed.
 
-(** * Finite Instance *)
+(** * 3.10 Finite Type Instances *)
 
 #[global]
 Instance rank_finite : Finite Rank := {
@@ -1382,7 +1448,7 @@ Instance position_finite : Finite Position := {
   enum_nodup := enum_position_NoDup
 }.
 
-(** * Algebraic Notation Support *)
+(** * 3.11 Algebraic Notation Support *)
 
 Definition file_to_char (f: File) : string :=
   match fin8_to_nat (file_val f) with
@@ -1437,7 +1503,7 @@ Definition char_to_rank (c: string) : option Rank :=
   | _ => None
   end.
 
-(** * Offset Preservation Properties *)
+(** * 3.12 Offset Preservation Properties *)
 
 Lemma offset_preserves_board_validity : forall p dr df p',
   offset p dr df = Some p' ->
@@ -1460,7 +1526,7 @@ Proof.
     + split; [apply rankZ_bounds | apply fileZ_bounds].
 Qed.
 
-(** * Offset Decidability *)
+(** * 3.13 Offset Decidability *)
 
 Lemma offset_decidable : forall p dr df,
   {p': Position | offset p dr df = Some p'} + {offset p dr df = None}.
@@ -1474,7 +1540,7 @@ Proof.
   - right. reflexivity.
 Defined.
 
-(** * Distance Properties *)
+(** * 3.14 Distance Metrics *)
 
 Definition manhattan_distance (p1 p2: Position) : Z :=
   Z.abs (rankZ p2 - rankZ p1) + Z.abs (fileZ p2 - fileZ p1).
@@ -1584,12 +1650,14 @@ Proof.
   exact offset_inverse.
 Qed.
 
+(** Verification that position enumeration covers all board squares *)
 Example position_enumeration_complete : forall p,
   In p enum_position.
 Proof.
   exact enum_position_complete.
 Qed.
 
+(** Coordinate transformation law for position offset *)
 Lemma offset_coord_change : forall p dr df p',
   offset p dr df = Some p' ->
   rankZ p' = rankZ p + dr /\
@@ -1608,14 +1676,15 @@ Close Scope Z_scope.
 (* SECTION 4: CORE GAME ONTOLOGY                                            *)
 (* ========================================================================= *)
 
-(** * Color Definition *)
+(** * 4.1 Color Type Definition *)
 
 Inductive Color : Type :=
   | White : Color
   | Black : Color.
 
-(** * Decidable Equality for Color *)
+(** * 4.2 Color Decidable Equality *)
 
+(** Decidability of color equality - computational equality test *)
 Lemma color_eq_dec : forall (c1 c2: Color), {c1 = c2} + {c1 <> c2}.
 Proof.
   decide equality.
@@ -1626,7 +1695,7 @@ Instance color_decidable_eq : DecidableEq Color := {
   dec_eq := color_eq_dec
 }.
 
-(** * Opposite Color *)
+(** * 4.3 Opposite Color Function *)
 
 Definition opposite_color (c: Color) : Color :=
   match c with
@@ -1634,27 +1703,30 @@ Definition opposite_color (c: Color) : Color :=
   | Black => White
   end.
 
-(** * Opposite Color Properties *)
+(** * 4.4 Opposite Color Properties *)
 
+(** Involution property - applying opposite_color twice yields identity *)
 Lemma opposite_color_involutive : forall c,
   opposite_color (opposite_color c) = c.
 Proof.
   intros []; reflexivity.
 Qed.
 
+(** Injectivity of color opposition mapping *)
 Lemma opposite_color_injective : forall c1 c2,
   opposite_color c1 = opposite_color c2 -> c1 = c2.
 Proof.
   intros [] []; simpl; intro H; [reflexivity|discriminate|discriminate|reflexivity].
 Qed.
 
+(** No color is its own opposite - fundamental property of two-player games *)
 Lemma opposite_color_neq : forall c,
   opposite_color c <> c.
 Proof.
   intros []; discriminate.
 Qed.
 
-(** * Piece Types for Shatranj *)
+(** * 4.5 Piece Type Definitions *)
 
 Inductive PieceType : Type :=
   | Shah   : PieceType  (* King *)
@@ -1664,8 +1736,9 @@ Inductive PieceType : Type :=
   | Rukh   : PieceType  (* Rook - same as chess rook *)
   | Baidaq : PieceType. (* Pawn - moves 1 forward, captures diagonally *)
 
-(** * Decidable Equality for PieceType *)
+(** * 4.6 PieceType Decidable Equality *)
 
+(** Decidability of piece type equality - enables piece type comparison *)
 Lemma piece_type_eq_dec : forall (pt1 pt2: PieceType), {pt1 = pt2} + {pt1 <> pt2}.
 Proof.
   decide equality.
@@ -1676,15 +1749,16 @@ Instance piece_type_decidable_eq : DecidableEq PieceType := {
   dec_eq := piece_type_eq_dec
 }.
 
-(** * Piece Definition *)
+(** * 4.7 Piece Record Definition *)
 
 Record Piece : Type := mkPiece {
   piece_color : Color;
   piece_type : PieceType
 }.
 
-(** * Decidable Equality for Piece *)
+(** * 4.8 Piece Decidable Equality *)
 
+(** Decidability of piece equality - structural equality on color and type *)
 Lemma piece_eq_dec : forall (p1 p2: Piece), {p1 = p2} + {p1 <> p2}.
 Proof.
   intros [c1 pt1] [c2 pt2].
@@ -1700,7 +1774,7 @@ Instance piece_decidable_eq : DecidableEq Piece := {
   dec_eq := piece_eq_dec
 }.
 
-(** * Piece Construction Helpers *)
+(** * 4.9 Standard Piece Constructors *)
 
 Definition white_shah   := mkPiece White Shah.
 Definition white_ferz   := mkPiece White Ferz.
@@ -1716,7 +1790,7 @@ Definition black_faras  := mkPiece Black Faras.
 Definition black_rukh   := mkPiece Black Rukh.
 Definition black_baidaq := mkPiece Black Baidaq.
 
-(** * Piece Properties *)
+(** * 4.10 Piece Property Predicates *)
 
 Definition is_shah (p: Piece) : bool :=
   match piece_type p with
@@ -1766,6 +1840,7 @@ Definition is_black (p: Piece) : bool :=
   | White => false
   end.
 
+(** Boolean equality test for colors *)
 Definition Color_beq (c1 c2: Color) : bool :=
   match c1, c2 with
   | White, White => true
@@ -1773,33 +1848,38 @@ Definition Color_beq (c1 c2: Color) : bool :=
   | _, _ => false
   end.
 
+(** Test whether two pieces belong to the same player *)
 Definition same_color (p1 p2: Piece) : bool :=
   Color_beq (piece_color p1) (piece_color p2).
 
+(** Test whether two pieces belong to opposing players *)
 Definition opposite_colors (p1 p2: Piece) : bool :=
   negb (same_color p1 p2).
 
-(** * Exhaustiveness Lemmas *)
+(** * 4.11 Exhaustiveness Lemmas *)
 
+(** Case analysis principle for the two-color system *)
 Lemma color_exhaustive : forall c (P: Color -> Prop),
   P White -> P Black -> P c.
 Proof.
   intros [] P HW HB; assumption.
 Qed.
 
+(** Complete case analysis for the six Shatranj piece types *)
 Lemma piece_type_exhaustive : forall pt (P: PieceType -> Prop),
   P Shah -> P Ferz -> P Alfil -> P Faras -> P Rukh -> P Baidaq -> P pt.
 Proof.
   intros [] P HS HF HA HN HR HB; assumption.
 Qed.
 
+(** Structural induction principle for pieces *)
 Lemma piece_exhaustive : forall p (P: Piece -> Prop),
   (forall c pt, P (mkPiece c pt)) -> P p.
 Proof.
   intros [c pt] P H. apply H.
 Qed.
 
-(** * Finite Instances *)
+(** * 4.12 Finite Type Class Instances *)
 
 #[global]
 Instance color_finite : Finite Color := {
@@ -1840,14 +1920,16 @@ Proof.
     + apply NoDup_list_prod; apply enum_nodup.
 Defined.
 
-(** * Piece Movement Classification *)
+(** * 4.13 Piece Movement Classification *)
 
+(** Classification predicate for sliding pieces (only Rukh in Shatranj) *)
 Definition is_sliding_piece (pt: PieceType) : bool :=
   match pt with
   | Rukh => true  (* Rukh slides along ranks/files *)
   | _ => false
   end.
 
+(** Classification predicate for leaping pieces (Alfil and Faras) *)
 Definition is_leaping_piece (pt: PieceType) : bool :=
   match pt with
   | Alfil => true  (* Alfil leaps exactly 2 diagonally *)
@@ -1855,6 +1937,7 @@ Definition is_leaping_piece (pt: PieceType) : bool :=
   | _ => false
   end.
 
+(** Classification predicate for single-step pieces (Shah, Ferz, Baidaq) *)
 Definition is_step_piece (pt: PieceType) : bool :=
   match pt with
   | Shah => true   (* Shah moves 1 square any direction *)
@@ -1863,6 +1946,7 @@ Definition is_step_piece (pt: PieceType) : bool :=
   | _ => false
   end.
 
+(** Every piece belongs to exactly one movement category *)
 Lemma piece_movement_complete : forall pt,
   is_sliding_piece pt = true \/ 
   is_leaping_piece pt = true \/ 
@@ -1871,6 +1955,7 @@ Proof.
   intros []; simpl; auto.
 Qed.
 
+(** Movement categories are mutually exclusive *)
 Lemma piece_movement_exclusive : forall pt,
   (is_sliding_piece pt = true -> is_leaping_piece pt = false /\ is_step_piece pt = false) /\
   (is_leaping_piece pt = true -> is_sliding_piece pt = false /\ is_step_piece pt = false) /\
@@ -1879,10 +1964,11 @@ Proof.
   intros []; simpl; repeat split; discriminate.
 Qed.
 
-(** * Piece Value for Material Calculation *)
+(** * 4.14 Material Value System *)
 
 Open Scope Z_scope.
 
+(** Historical relative piece values in Shatranj *)
 Definition piece_value (pt: PieceType) : Z :=
   match pt with
   | Shah => 1000  (* Infinite value, but we use large number *)
@@ -1893,6 +1979,7 @@ Definition piece_value (pt: PieceType) : Z :=
   | Baidaq => 1
   end.
 
+(** All pieces have positive material value *)
 Lemma piece_value_positive : forall pt,
   piece_value pt > 0.
 Proof.
@@ -1901,8 +1988,9 @@ Qed.
 
 Close Scope Z_scope.
 
-(** * Piece Notation *)
+(** * 4.15 Algebraic Notation Support *)
 
+(** Standard algebraic notation symbols for piece types *)
 Definition piece_type_to_char (pt: PieceType) : string :=
   match pt with
   | Shah => "K"
@@ -1913,6 +2001,7 @@ Definition piece_type_to_char (pt: PieceType) : string :=
   | Baidaq => ""  (* Pawns have no letter *)
   end.
 
+(** Complete piece notation with color distinction (uppercase White, lowercase Black) *)
 Definition piece_to_char (p: Piece) : string :=
   let pt_char := piece_type_to_char (piece_type p) in
   match piece_color p with
@@ -1928,8 +2017,9 @@ Definition piece_to_char (p: Piece) : string :=
       end
   end.
 
-(** * FEN Character Support *)
+(** * 4.16 FEN (Forsyth-Edwards Notation) Support *)
 
+(** Parse FEN character to piece representation *)
 Definition char_to_piece (c: string) : option Piece :=
   match c with
   | "K" => Some white_shah
@@ -1947,7 +2037,7 @@ Definition char_to_piece (c: string) : option Piece :=
   | _ => None
   end.
 
-(** * Special Piece Properties for Shatranj *)
+(** * 4.17 Shatranj-Specific Game Constants *)
 
 (** Alfil can only reach 1/8 of the board from any position *)
 Definition alfil_reachable_squares : nat := 8.
@@ -1958,14 +2048,16 @@ Definition ferz_max_moves : nat := 4.
 (** Baidaq promotes only to Ferz *)
 Definition baidaq_promotion_type : PieceType := Ferz.
 
-(** * Validation Examples *)
+(** * 4.18 Validation of Core Properties *)
 
+(** Validation of color involution property *)
 Example opposite_color_involutive_validated : forall c,
   opposite_color (opposite_color c) = c.
 Proof.
   exact opposite_color_involutive.
 Qed.
 
+(** Exhaustive case coverage for piece types *)
 Example piece_type_cases : forall pt,
   pt = Shah \/ pt = Ferz \/ pt = Alfil \/ 
   pt = Faras \/ pt = Rukh \/ pt = Baidaq.
@@ -1979,14 +2071,16 @@ Proof.
   |right; right; right; right; right; reflexivity].
 Qed.
 
+(** Fundamental distinction between opposing forces *)
 Example white_pieces_different_from_black : forall pt,
   mkPiece White pt <> mkPiece Black pt.
 Proof.
   intros pt H. injection H. discriminate.
 Qed.
 
-(** * Piece Counting Utilities *)
+(** * 4.19 Piece Counting Utilities *)
 
+(** Boolean equality for piece types *)
 Definition PieceType_beq (pt1 pt2: PieceType) : bool :=
   match pt1, pt2 with
   | Shah, Shah => true
@@ -1998,22 +2092,24 @@ Definition PieceType_beq (pt1 pt2: PieceType) : bool :=
   | _, _ => false
   end.
 
+(** Count pieces of a specific type in a collection *)
 Definition count_piece_type (pt: PieceType) (pieces: list Piece) : nat :=
   List.length (filter (fun p => PieceType_beq (piece_type p) pt) pieces).
 
+(** Count pieces belonging to a specific player *)
 Definition count_color_pieces (c: Color) (pieces: list Piece) : nat :=
   List.length (filter (fun p => Color_beq (piece_color p) c) pieces).
 
-(** * Historical Note Validation *)
+(** * 4.20 Historical Accuracy Validation *)
 
-(** Validates that Alfil movement is restricted compared to Bishop *)
+(** Alfil's leaping movement distinguishes it from modern Bishop's sliding *)
 Lemma alfil_not_bishop : 
   is_leaping_piece Alfil = true /\ is_sliding_piece Alfil = false.
 Proof.
   split; reflexivity.
 Qed.
 
-(** Validates that Ferz movement is restricted compared to Queen *)
+(** Ferz's single-step diagonal movement contrasts with modern Queen's power *)
 Lemma ferz_not_queen :
   is_step_piece Ferz = true /\ is_sliding_piece Ferz = false.
 Proof.
@@ -2026,34 +2122,38 @@ Qed.
 (* SECTION 5: BOARD ABSTRACTION                                             *)
 (* ========================================================================= *)
 
-(** * Board Type Definition *)
+(** * 5.1 Board Type Definition *)
 
 Definition Board : Type := Position -> option Piece.
 
-(** * Board Access Notation *)
+(** * 5.2 Board Access Notation *)
 
 Notation "b [ p ]" := (b p) (at level 1).
 Notation "b [ p := pc ]" := 
   (fun p' => if position_eq_dec p p' then pc else b p')
   (at level 1).
 
-(** * Board Equality *)
+(** * 5.3 Extensional Board Equality *)
 
+(** Extensional equality - boards are equal if they agree on all positions *)
 Definition board_eq (b1 b2: Board) : Prop :=
   forall p, b1[p] = b2[p].
 
 Notation "b1 '==' b2" := (board_eq b1 b2) (at level 70).
 
+(** Reflexivity of board equality *)
 Lemma board_eq_refl : forall b, b == b.
 Proof.
   intros b p. reflexivity.
 Qed.
 
+(** Symmetry of board equality *)
 Lemma board_eq_sym : forall b1 b2, b1 == b2 -> b2 == b1.
 Proof.
   intros b1 b2 H p. symmetry. apply H.
 Qed.
 
+(** Transitivity of board equality *)
 Lemma board_eq_trans : forall b1 b2 b3, 
   b1 == b2 -> b2 == b3 -> b1 == b3.
 Proof.
@@ -2061,7 +2161,7 @@ Proof.
   transitivity (b2[p]); [apply H12 | apply H23].
 Qed.
 
-(** * Board Setoid Instance *)
+(** * 5.4 Board Setoid Instance *)
 
 Require Import Coq.Classes.Equivalence.
 
@@ -2072,7 +2172,7 @@ Instance board_equiv : Equivalence board_eq := {
   Equivalence_Transitive := board_eq_trans
 }.
 
-(** * Board Update Operations *)
+(** * 5.5 Board Update Operations *)
 
 Definition board_set (b: Board) (p: Position) (pc: option Piece) : Board :=
   b[p := pc].
@@ -2092,8 +2192,9 @@ Definition board_move (b: Board) (from to: Position) : Board :=
   | None => b
   end.
 
-(** * Board Update Properties *)
+(** * 5.6 Board Update Properties *)
 
+(** Reading a position after writing returns the written value *)
 Lemma board_set_get_same : forall b p pc,
   board_get (board_set b p pc) p = pc.
 Proof.
@@ -2101,6 +2202,7 @@ Proof.
   destruct (position_eq_dec p p); [reflexivity|contradiction].
 Qed.
 
+(** Writing to one position preserves values at other positions *)
 Lemma board_set_get_other : forall b p1 p2 pc,
   p1 <> p2 ->
   board_get (board_set b p1 pc) p2 = board_get b p2.
@@ -2109,6 +2211,7 @@ Proof.
   destruct (position_eq_dec p1 p2); [contradiction|reflexivity].
 Qed.
 
+(** Successive writes to the same position - last write wins *)
 Lemma board_set_set_same : forall b p pc1 pc2,
   board_set (board_set b p pc1) p pc2 == board_set b p pc2.
 Proof.
@@ -2116,6 +2219,7 @@ Proof.
   destruct (position_eq_dec p p'); reflexivity.
 Qed.
 
+(** Commutativity of updates to distinct positions *)
 Lemma board_set_set_comm : forall b p1 p2 pc1 pc2,
   p1 <> p2 ->
   board_set (board_set b p1 pc1) p2 pc2 == 
@@ -2126,41 +2230,48 @@ Proof.
     subst; try reflexivity; try contradiction.
 Qed.
 
-(** * Board Predicates *)
+(** * 5.7 Board Query Predicates *)
 
+(** Test if a position contains any piece *)
 Definition occupied (b: Board) (p: Position) : bool :=
   match b[p] with
   | Some _ => true
   | None => false
   end.
 
+(** Test if a position contains a piece of specified color *)
 Definition occupied_by (b: Board) (p: Position) (c: Color) : bool :=
   match b[p] with
   | Some pc => Color_beq (piece_color pc) c
   | None => false
   end.
 
+(** Test if a position is vacant *)
 Definition empty (b: Board) (p: Position) : bool :=
   negb (occupied b p).
 
+(** Test if a position contains a specific piece type *)
 Definition has_piece_type (b: Board) (p: Position) (pt: PieceType) : bool :=
   match b[p] with
   | Some pc => PieceType_beq (piece_type pc) pt
   | None => false
   end.
 
-(** * Empty Board *)
+(** * 5.8 Empty Board Definition *)
 
+(** The vacant board with no pieces *)
 Definition empty_board : Board := fun _ => None.
 
+(** All positions on empty board are vacant *)
 Lemma empty_board_empty : forall p, 
   empty empty_board p = true.
 Proof.
   intro p. reflexivity.
 Qed.
 
-(** * Initial Position Setup - Standard Configuration *)
+(** * 5.9 Standard Initial Position Configuration *)
 
+(** Setup for back rank pieces in standard Shatranj opening *)
 Definition initial_rank_setup (c: Color) : Position -> option Piece :=
   fun p =>
     let r := if Color_beq c White then rank1 else rank8 in
@@ -2176,6 +2287,7 @@ Definition initial_rank_setup (c: Color) : Position -> option Piece :=
       else None
     else None.
 
+(** Setup for Baidaq (pawn) initial positions *)
 Definition initial_baidaq_setup (c: Color) : Position -> option Piece :=
   fun p =>
     let r := if Color_beq c White then rank2 else rank7 in
@@ -2183,6 +2295,7 @@ Definition initial_baidaq_setup (c: Color) : Position -> option Piece :=
       Some (mkPiece c Baidaq)
     else None.
 
+(** Complete standard initial board configuration *)
 Definition standard_initial_board : Board :=
   fun p =>
     match initial_rank_setup White p with
@@ -2196,8 +2309,9 @@ Definition standard_initial_board : Board :=
               end
     end.
 
-(** * Alternative Initial Position *)
+(** * 5.10 Alternative Initial Position Configuration *)
 
+(** Alternative back rank with Shah and Ferz positions swapped *)
 Definition alternative_rank_setup (c: Color) : Position -> option Piece :=
   fun p =>
     let r := if Color_beq c White then rank1 else rank8 in
@@ -2213,6 +2327,7 @@ Definition alternative_rank_setup (c: Color) : Position -> option Piece :=
       else None
     else None.
 
+(** Complete alternative initial board configuration *)
 Definition alternative_initial_board : Board :=
   fun p =>
     match alternative_rank_setup White p with
@@ -2226,8 +2341,9 @@ Definition alternative_initial_board : Board :=
               end
     end.
 
-(** * Historical Tabiyat *)
+(** * 5.11 Historical Tabiyat (Opening Arrays) *)
 
+(** Muwashshah (Decorated) opening position from medieval manuscripts *)
 Definition tabiya_muwashshah : Board :=
   fun p =>
     if position_eq_dec p (mkPosition rank1 fileA) then Some white_rukh
@@ -2383,34 +2499,41 @@ Definition has_shah (b: Board) (c: Color) : bool :=
   | None => false
   end.
 
+(** Count Shah pieces of a given color on the board *)
 Definition shah_count (b: Board) (c: Color) : nat :=
   count_piece_type_on_board b c Shah.
 
+(** Verify each player has exactly one Shah *)
 Definition valid_shah_count (b: Board) : bool :=
   andb (Nat.eqb (shah_count b White) 1)
        (Nat.eqb (shah_count b Black) 1).
 
+(** Verify legal piece counts (max 8 Baidaqs per player) *)
 Definition valid_piece_counts (b: Board) : bool :=
   andb (Nat.leb (count_piece_type_on_board b White Baidaq) 8)
        (Nat.leb (count_piece_type_on_board b Black Baidaq) 8).
 
+(** Board validity predicate combining all constraints *)
 Definition well_formed_board (b: Board) : bool :=
   andb (valid_shah_count b) (valid_piece_counts b).
 
-(** * Board Examples and Validation *)
+(** * 5.12 Board Validation Examples *)
 
+(** Immediate retrieval after update returns updated value *)
 Example board_update_retrieve : forall b p pc,
   board_get (board_set b p (Some pc)) p = Some pc.
 Proof.
   intros. apply board_set_get_same.
 Qed.
 
+(** Filtering with constant false predicate yields empty list *)
 Lemma filter_false : forall {A: Type} (l: list A),
   filter (fun _ => false) l = [].
 Proof.
   intros A l. induction l; simpl; auto.
 Qed.
 
+(** Empty board contains no pieces of any color *)
 Example empty_board_no_pieces : forall c,
   count_pieces empty_board c = 0.
 Proof.
@@ -2422,8 +2545,9 @@ Proof.
   rewrite H. reflexivity.
 Qed.
 
-(** * Board Comparison *)
+(** * 5.13 Board Comparison Operations *)
 
+(** Compute positions where two boards differ *)
 Definition boards_differ_at (b1 b2: Board) : list Position :=
   filter (fun p => negb (match b1[p], b2[p] with
                          | Some p1, Some p2 => if piece_eq_dec p1 p2 then true else false
@@ -2431,6 +2555,7 @@ Definition boards_differ_at (b1 b2: Board) : list Position :=
                          | _, _ => false
                          end)) enum_position.
 
+(** Filtering with uniformly false predicate produces empty list *)
 Lemma filter_nil : forall {A: Type} (P: A -> bool) (l: list A),
   (forall x, In x l -> P x = false) -> filter P l = [].
 Proof.
@@ -2439,6 +2564,7 @@ Proof.
   rewrite Ha. apply IHl. intros x Hx. apply H. right. exact Hx.
 Qed.
 
+(** Empty filter result implies predicate is false on all elements *)
 Lemma filter_empty_implies : forall {A: Type} (P: A -> bool) (l: list A) (x: A),
   filter P l = [] -> In x l -> P x = false.
 Proof.
@@ -2451,6 +2577,7 @@ Proof.
       * apply IHl; assumption.
 Qed.
 
+(** Board equality characterized by absence of differences *)
 Lemma board_eq_iff_no_diff : forall b1 b2,
   b1 == b2 <-> boards_differ_at b1 b2 = [].
 Proof.
@@ -2489,11 +2616,11 @@ Qed.
 
 Open Scope Z_scope.
 
-(** * Movement Vector Type *)
+(** * 6.1 Movement Vector Type Definition *)
 
 Definition MovementVector : Type := (Z * Z).
 
-(** * Basic Movement Categories *)
+(** * 6.2 Basic Movement Categories *)
 
 (** Step moves - exactly one square in specified direction *)
 Definition is_step_move (dr df: Z) : bool :=
@@ -2510,50 +2637,52 @@ Definition is_diagonal (dr df: Z) : bool :=
   Z.eqb (Z.abs dr) (Z.abs df) &&
   negb (andb (Z.eqb dr 0) (Z.eqb df 0)).
 
-(** * Specific Movement Patterns *)
+(** * 6.3 Piece-Specific Movement Patterns *)
 
-(** Shah movement - one square in any direction *)
+(** Shah (King) movement vectors - all eight adjacent squares *)
 Definition shah_vectors : list MovementVector :=
   [(1, 0); (-1, 0); (0, 1); (0, -1);    (* orthogonal *)
    (1, 1); (1, -1); (-1, 1); (-1, -1)].  (* diagonal *)
 
-(** Ferz movement - one square diagonally only *)
+(** Ferz (Counselor) movement vectors - four diagonal neighbors *)
 Definition ferz_vectors : list MovementVector :=
   [(1, 1); (1, -1); (-1, 1); (-1, -1)].
 
-(** Alfil movement - leap exactly 2 squares diagonally *)
+(** Alfil (Elephant) leap vectors - exactly 2 squares diagonally *)
 Definition alfil_vectors : list MovementVector :=
   [(2, 2); (2, -2); (-2, 2); (-2, -2)].
 
-(** Faras (Knight) movement - L-shaped *)
+(** Faras (Knight) L-shaped movement vectors *)
 Definition faras_vectors : list MovementVector :=
   [(2, 1); (2, -1); (-2, 1); (-2, -1);
    (1, 2); (1, -2); (-1, 2); (-1, -2)].
 
-(** Rukh movement directions (unit vectors) *)
+(** Rukh (Rook) orthogonal movement unit vectors *)
 Definition rukh_directions : list MovementVector :=
   [(1, 0); (-1, 0); (0, 1); (0, -1)].
 
-(** Baidaq movement depends on color *)
+(** Baidaq (Pawn) forward movement vector - color-dependent direction *)
 Definition baidaq_move_vector (c: Color) : MovementVector :=
   match c with
   | White => (1, 0)  (* rank increases for white *)
   | Black => (-1, 0) (* rank decreases for black *)
   end.
 
+(** Baidaq diagonal capture vectors - color-dependent *)
 Definition baidaq_capture_vectors (c: Color) : list MovementVector :=
   match c with
   | White => [(1, 1); (1, -1)]
   | Black => [(-1, 1); (-1, -1)]
   end.
 
-(** * Movement Classification *)
+(** * 6.4 Movement Type Classification *)
 
 Inductive MoveType : Type :=
   | Step   : MoveType  (* Single square movement *)
   | Leap   : MoveType  (* Jump to specific square *)
   | Slide  : MoveType. (* Multiple squares along line *)
 
+(** Categorize piece movement mechanics by type *)
 Definition classify_piece_movement (pt: PieceType) : MoveType :=
   match pt with
   | Shah => Step
@@ -2564,11 +2693,13 @@ Definition classify_piece_movement (pt: PieceType) : MoveType :=
   | Baidaq => Step
   end.
 
-(** * Step Movement *)
+(** * 6.5 Step Movement Implementation *)
 
+(** Boolean equality test for positions *)
 Definition position_beq (p1 p2: Position) : bool :=
   if position_eq_dec p1 p2 then true else false.
 
+(** Validate single-step movement along allowed vectors *)
 Definition step_move (b: Board) (from to: Position) (vectors: list MovementVector) : bool :=
   existsb (fun v =>
     match offset from (fst v) (snd v) with
@@ -2576,8 +2707,9 @@ Definition step_move (b: Board) (from to: Position) (vectors: list MovementVecto
     | None => false
     end) vectors.
 
-(** * Leap Movement *)
+(** * 6.6 Leap Movement Implementation *)
 
+(** Validate jumping movement to specific squares *)
 Definition leap_move (b: Board) (from to: Position) (vectors: list MovementVector) : bool :=
   existsb (fun v =>
     match offset from (fst v) (snd v) with
@@ -2585,8 +2717,9 @@ Definition leap_move (b: Board) (from to: Position) (vectors: list MovementVecto
     | None => false
     end) vectors.
 
-(** * Slide Movement *)
+(** * 6.7 Sliding Movement Implementation *)
 
+(** Generate reachable positions along a sliding direction *)
 Fixpoint slide_move_n (b: Board) (from: Position) (dr df: Z) (n: nat) : list Position :=
   match n with
   | O => []
@@ -2601,14 +2734,16 @@ Fixpoint slide_move_n (b: Board) (from: Position) (dr df: Z) (n: nat) : list Pos
       end
   end.
 
+(** Validate sliding movement along orthogonal or diagonal lines *)
 Definition slide_move (b: Board) (from to: Position) (directions: list MovementVector) : bool :=
   existsb (fun dir =>
     let positions := slide_move_n b from (fst dir) (snd dir) 7 in
     existsb (fun p => position_beq p to) positions
   ) directions.
 
-(** * Path Checking *)
+(** * 6.8 Path Obstruction Checking *)
 
+(** Compute intermediate positions between source and destination *)
 Definition path_between (from to: Position) : option (list Position) :=
   match direction_to from to with
   | Some (dr, df) =>
@@ -2629,18 +2764,20 @@ Definition path_between (from to: Position) : option (list Position) :=
   | None => None
   end.
 
+(** Verify no obstructing pieces along movement path *)
 Definition path_clear_between (b: Board) (from to: Position) : bool :=
   match path_between from to with
   | Some path => list_all (empty b) path
   | None => false
   end.
 
-(** * Alfil Color Complex Theory *)
+(** * 6.9 Alfil Color Complex Theory *)
 
+(** Compute square color parity for Alfil reachability analysis *)
 Definition alfil_square_color (p: Position) : Z :=
   Z.modulo ((rankZ p) + (fileZ p)) 2.
 
-(** Helper lemma: adding 4 doesn't change mod 2 *)
+(** Modular arithmetic property - adding 4 preserves parity *)
 Lemma Z_mod_plus_4 : forall z : Z,
   (z + 4) mod 2 = z mod 2.
 Proof.
@@ -2650,7 +2787,7 @@ Proof.
   reflexivity.
 Qed.
 
-(** Helper lemma: subtracting 4 doesn't change mod 2 *)
+(** Modular arithmetic property - subtracting 4 preserves parity *)
 Lemma Z_mod_minus_4 : forall z : Z,
   (z - 4) mod 2 = z mod 2.
 Proof.
@@ -2660,6 +2797,7 @@ Proof.
   reflexivity.
 Qed.
 
+(** Alfil movement preserves square color - fundamental constraint *)
 Lemma alfil_preserves_square_color : forall p dr df,
   In (dr, df) alfil_vectors ->
   forall p', offset p dr df = Some p' ->
@@ -2757,7 +2895,7 @@ Proof.
   apply alfil_reachable_count_max.
 Qed.
 
-(** Helper 3: Empty list has length 0 *)
+(** Empty list length specification *)
 Lemma empty_list_length : 
   @List.length Position nil = 0%nat.
 Proof.
@@ -2765,7 +2903,7 @@ Proof.
   reflexivity.
 Qed.
 
-(** Helper 4: Single element list has length 1 *)
+(** Singleton list length specification *)
 Lemma single_list_length : forall (p: Position),
   List.length (p :: nil) = 1%nat.
 Proof.
@@ -2774,25 +2912,25 @@ Proof.
   reflexivity.
 Qed.
 
-(** Helper 5: Basic inequality - 0 <= 8 *)
+(** Basic natural number bound - zero is at most eight *)
 Lemma zero_le_eight : (0 <= 8)%nat.
 Proof.
   apply Nat.le_0_l.
 Qed.
 
-(** Helper 6: Basic inequality - 1 <= 8 *)
+(** Basic natural number bound - one is at most eight *)
 Lemma one_le_eight : (1 <= 8)%nat.
 Proof.
   auto with arith.
 Qed.
 
-(** Helper 7: Basic inequality - 4 <= 8 *)
+(** Basic natural number bound - four is at most eight *)
 Lemma four_le_eight : (4 <= 8)%nat.
 Proof.
   auto with arith.
 Qed.
 
-(** Helper 8: List length is always >= 0 *)
+(** Non-negativity of list length *)
 Lemma list_length_nonneg : forall (l: list Position),
   (0 <= List.length l)%nat.
 Proof.
@@ -2800,7 +2938,7 @@ Proof.
   apply Nat.le_0_l.
 Qed.
 
-(** Helper 9: If we know something is true, we can assert it *)
+(** Lemma: Known equality implies bound *)
 Lemma assert_known_bound : forall n,
   n = 8%nat -> (n <= 8)%nat.
 Proof.
@@ -2809,7 +2947,7 @@ Proof.
   auto with arith.
 Qed.
 
-(** Helper 10: Transitivity of <= *)
+(** Lemma: Transitivity of natural number ordering *)
 Lemma le_trans_8 : forall n m,
   (n <= m)%nat -> (m <= 8)%nat -> (n <= 8)%nat.
 Proof.
@@ -2817,7 +2955,7 @@ Proof.
   apply (Nat.le_trans n m 8 H1 H2).
 Qed.
 
-(** Helper 11: After 0 iterations, we have at most 1 position *)
+(** Lemma: Initial iteration bound for Alfil reachability *)
 Lemma alfil_reachable_n_0 : forall p,
   (List.length (alfil_reachable_n (p :: nil) (p :: nil) 0) <= 1)%nat.
 Proof.
@@ -2827,7 +2965,7 @@ Proof.
   auto with arith.
 Qed.
 
-(** Helper: The alfil reachability function terminates and produces a finite list *)
+(** Lemma: Alfil reachability function termination *)
 Lemma alfil_reachability_finite : forall p n,
   exists m, List.length (alfil_reachable_n (p :: nil) (p :: nil) n) = m.
 Proof.
@@ -2836,7 +2974,7 @@ Proof.
   reflexivity.
 Qed.
 
-(** Theorem: Alfil can only reach finite squares *)
+(** Theorem: Alfil reachability is finite *)
 Theorem alfil_restricted_squares : forall p,
   exists n, List.length (alfil_full_reachable p) = n.
 Proof.
@@ -2845,8 +2983,9 @@ Proof.
   reflexivity.
 Qed.
 
-(** * Movement Validation *)
+(** * 6.5 Movement Validation Functions *)
 
+(** Validates single-step movement along specified directional vectors *)
 Definition validate_step_move (from to: Position) (vectors: list MovementVector) : bool :=
   existsb (fun v =>
     match offset from (fst v) (snd v) with
@@ -2854,6 +2993,7 @@ Definition validate_step_move (from to: Position) (vectors: list MovementVector)
     | None => false
     end) vectors.
 
+(** Validates leap movement directly to target position *)
 Definition validate_leap_move (from to: Position) (vectors: list MovementVector) : bool :=
   existsb (fun v =>
     match offset from (fst v) (snd v) with
@@ -2861,6 +3001,7 @@ Definition validate_leap_move (from to: Position) (vectors: list MovementVector)
     | None => false
     end) vectors.
 
+(** Validates sliding movement along orthogonal or diagonal rays *)
 Definition validate_slide_move (from to: Position) (directions: list MovementVector) : bool :=
   existsb (fun dir =>
     let dr := fst dir in
@@ -2879,8 +3020,9 @@ Definition validate_slide_move (from to: Position) (directions: list MovementVec
     check_line from 7%nat
   ) directions.
 
-(** * Movement Properties *)
+(** * 6.6 Movement Distance Properties *)
 
+(** Theorem: Step movements satisfy Manhattan distance bound of 2 *)
 Lemma step_move_distance_one : forall from to vectors,
   validate_step_move from to vectors = true ->
   vectors = shah_vectors \/ vectors = ferz_vectors ->
@@ -2907,6 +3049,7 @@ Proof.
   - discriminate.
 Qed.
 
+(** Theorem: Alfil leap movements maintain Chebyshev distance of exactly 2 *)
 Lemma alfil_leap_distance : forall from to,
   validate_leap_move from to alfil_vectors = true ->
   chebyshev_distance from to = 2.
@@ -2971,6 +3114,7 @@ Proof.
     simpl. reflexivity.
 Qed.
 
+(** L-shaped movement pattern validation for Faras pieces *)
 Lemma faras_leap_L_shape : forall from to,
   validate_leap_move from to faras_vectors = true ->
   let dr := Z.abs (rankZ to - rankZ from) in
@@ -2995,8 +3139,9 @@ Proof.
    simpl; lia).
 Qed.
 
-(** * Movement Helpers *)
+(** * 6.7 Movement Helper Functions *)
 
+(** Single-move reachability test for piece types *)
 Definition can_reach_in_one (from to: Position) (pt: PieceType) : bool :=
   match pt with
   | Shah => validate_step_move from to shah_vectors
@@ -3007,17 +3152,20 @@ Definition can_reach_in_one (from to: Position) (pt: PieceType) : bool :=
   | Baidaq => false  (* Baidaq movement depends on color and capture *)
   end.
 
-(** * Line of Sight *)
+(** * 6.10 Line of Sight Checking *)
 
+(** Alignment test for orthogonal and diagonal positioning *)
 Definition on_same_line (p1 p2: Position) : bool :=
   orb (on_same_rank p1 p2) 
       (orb (on_same_file p1 p2) (on_same_diagonal p1 p2)).
 
+(** Path obstruction detection for sliding movements *)
 Definition line_blocked (b: Board) (from to: Position) : bool :=
   negb (path_clear_between b from to).
 
 Open Scope Z_scope.
 
+(** Maximum Chebyshev distance bound on standard board *)
 Theorem path_fuel_7_sufficient : 
   forall from to : Position,
   chebyshev_distance from to <= 7.
@@ -3026,6 +3174,7 @@ Proof.
   apply chebyshev_max_distance.
 Qed.
 
+(** Board dimension constraints for sliding movements *)
 Theorem validate_slide_7_sufficient : forall from to directions,
   validate_slide_move from to directions = true ->
   chebyshev_distance from to <= 7.
@@ -3036,8 +3185,9 @@ Qed.
 
 Close Scope Z_scope.
 
-(** * Movement Validation Examples *)
+(** * 6.11 Movement Validation Examples *)
 
+(** Shah diagonal movement validation *)
 Example shah_can_move_diagonal : 
   validate_step_move (mkPosition rank4 fileD) (mkPosition rank5 fileE) shah_vectors = true.
 Proof.
@@ -3046,6 +3196,7 @@ Proof.
   reflexivity.
 Qed.
 
+(** Alfil single-square diagonal movement restriction *)
 Example alfil_cannot_move_one :
   validate_leap_move (mkPosition rank4 fileD) (mkPosition rank5 fileE) alfil_vectors = false.
 Proof.
@@ -3054,6 +3205,7 @@ Proof.
   reflexivity.
 Qed.
 
+(** Alfil two-square diagonal leap validation *)
 Example alfil_can_leap_two :
   validate_leap_move (mkPosition rank4 fileD) (mkPosition rank6 fileF) alfil_vectors = true.
 Proof.
@@ -3062,8 +3214,9 @@ Proof.
   reflexivity.
 Qed.
 
-(** * Movement Type Lemmas *)
+(** * 6.12 Movement Type Classification Properties *)
 
+(** Mutual exclusivity of movement type categories *)
 Lemma movement_type_exclusive : forall pt,
   match classify_piece_movement pt with
   | Step => is_sliding_piece pt = false /\ is_leaping_piece pt = false
@@ -3074,6 +3227,7 @@ Proof.
   intros []; simpl; auto.
 Qed.
 
+(** Every piece has exactly one movement type *)
 Lemma movement_type_complete : forall pt,
   match classify_piece_movement pt with
   | Step => is_step_piece pt = true
@@ -3094,10 +3248,11 @@ Close Scope Z_scope.
 
 Open Scope Z_scope.
 
-(** * Movement Specifications *)
+(** * 7.1 Movement Specifications and Attack Detection *)
 
-(** * Check Detection Functions - Required for Shah Movement *)
+(** * 7.2 Attack and Check Detection *)
 
+(** Determine if a piece at 'from' attacks position 'to' *)
 Definition attacks (b: Board) (from to: Position) : bool :=
   match b[from] with
   | None => false
@@ -3120,6 +3275,7 @@ Definition attacks (b: Board) (from to: Position) : bool :=
       end
   end.
 
+(** Find all pieces of specified color attacking target position *)
 Fixpoint find_attacking_pieces (b: Board) (target: Position) (by_color: Color) 
                                (remaining: list Position) : list Position :=
   match remaining with
@@ -3135,19 +3291,22 @@ Fixpoint find_attacking_pieces (b: Board) (target: Position) (by_color: Color)
       end
   end.
 
+(** Test if position is under attack by specified color *)
 Definition position_under_attack_by (b: Board) (pos: Position) (by_color: Color) : bool :=
   match find_attacking_pieces b pos by_color enum_position with
   | [] => false
   | _ => true
   end.
 
+(** Test if Shah move would result in self-check *)
 Definition shah_move_would_leave_in_check (b: Board) (c: Color) (from to: Position) : bool :=
   let b_after_move := board_move b from to in
   position_under_attack_by b_after_move to (opposite_color c).
 
 
-(** * SHAH (King) Movement *)
+(** * 7.3 Shah (King) Movement Rules *)
 
+(** Formal specification of legal Shah movement *)
 Definition shah_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
   exists dr df,
     In (dr, df) shah_vectors /\
@@ -3158,11 +3317,13 @@ Definition shah_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
     end /\
     shah_move_would_leave_in_check b c from to = false.
 
+(** Computational implementation of Shah movement validation *)
 Definition shah_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
   validate_step_move from to shah_vectors &&
   negb (occupied_by b to c) &&
   negb (shah_move_would_leave_in_check b c from to).
 
+(** Boolean color equality reflects propositional equality *)
 Lemma Color_beq_eq : forall c1 c2,
   Color_beq c1 c2 = true <-> c1 = c2.
 Proof.
@@ -3171,6 +3332,7 @@ Proof.
   - intro H. subst. destruct c2; reflexivity.
 Qed.
 
+(** Boolean color inequality reflects propositional inequality *)
 Lemma Color_beq_neq : forall c1 c2,
   Color_beq c1 c2 = false <-> c1 <> c2.
 Proof.
@@ -3182,12 +3344,14 @@ Proof.
      contradiction H; reflexivity].
 Qed.
 
+(** Reflexivity of boolean color equality *)
 Lemma Color_beq_refl : forall c,
   Color_beq c c = true.
 Proof.
   intro c. destruct c; reflexivity.
 Qed.
 
+(** Soundness theorem for Shah movement implementation *)
 Lemma shah_move_sound : forall b c from to,
   shah_move_impl b c from to = true ->
   shah_move_spec b c from to.
@@ -3236,7 +3400,7 @@ Proof.
   - apply negb_true_iff. exact Hnocheck.
 Qed.
 
-(** * FERZ (Counselor) Movement *)
+(** * 7.4 Ferz (Counselor) Movement Rules *)
 
 Definition ferz_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
   exists dr df,
@@ -3293,7 +3457,7 @@ Proof.
     + reflexivity.
 Qed.
 
-(** * ALFIL (Elephant) Movement *)
+(** * 7.5 Alfil (Elephant) Movement Rules *)
 
 Definition alfil_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
   exists dr df,
@@ -3350,7 +3514,7 @@ Proof.
     + reflexivity.
 Qed.
 
-(** * Alfil Color-Bound Validation *)
+(** * 7.6 Alfil Color-Binding Properties *)
 
 Lemma alfil_restricted_movement : forall p,
   (List.length (alfil_reachable_from p) <= 4)%nat.
@@ -3374,7 +3538,7 @@ Proof.
   exact alfil_restricted_movement.
 Qed.
 
-(** * FARAS (Knight) Movement *)
+(** * 7.7 Faras (Knight) Movement Rules *)
 
 Definition faras_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
   exists dr df,
@@ -3431,9 +3595,9 @@ Proof.
     + reflexivity.
 Qed.
 
-(** * RUKH (Rook) Movement *)
+(** * 7.8 Rukh (Rook) Movement Rules *)
 
-(** Step 1: Basic position comparison lemmas *)
+(** Position equality and comparison foundations *)
 
 Lemma position_beq_refl : forall p,
   position_beq p p = true.
@@ -3482,7 +3646,7 @@ Proof.
   intros. apply position_beq_false_neq. assumption.
 Qed.
 
-(** Step 2: Rukh direction validation *)
+(** Rukh directional movement constraints *)
 
 Lemma rukh_directions_non_zero : forall dr df,
   In (dr, df) rukh_directions ->
@@ -3523,7 +3687,7 @@ Proof.
   intro H. apply rukh_directions_orthogonal. exact H.
 Qed.
 
-(** Step 3: Offset lemmas for single steps *)
+(** Single-step offset properties *)
 
 Lemma offset_zero_is_identity : forall p,
   offset p 0 0 = Some p.
@@ -3561,10 +3725,9 @@ Proof.
   - left. discriminate.
 Qed.
 
-(** Step 4: Building paths with witness extraction *)
+(** Path construction with distance witness extraction *)
 
-(** This function finds the distance to reach a target position in a given direction,
-    returning the witness (number of steps) if successful *)
+(** Distance computation along directional ray with step count witness *)
 Fixpoint rukh_find_path_distance (b: Board) (from: Position) (dr df: Z) 
                                   (to: Position) (fuel: nat) : option nat :=
   match fuel with
@@ -3637,7 +3800,7 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** Step 5: Rukh move specification with witness *)
+(** Rukh movement specification with distance witness *)
 
 Definition rukh_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
   exists dr df (n: nat),
@@ -3652,7 +3815,7 @@ Definition rukh_move_spec (b: Board) (c: Color) (from to: Position) : Prop :=
     | None => True
     end.
 
-(** Step 6: Rukh move implementation using witness function *)
+(** Rukh movement implementation with distance validation *)
 
 Definition rukh_max_distance : nat := 7.
 
@@ -3675,9 +3838,9 @@ Definition rukh_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
     end
   ) rukh_directions.
 
-(** Step 7: Helper lemmas for soundness and completeness *)
+(** Soundness and completeness foundations for Rukh movement *)
 
-(** Helper lemma for connecting find_path_distance to the spec *)
+(** Path distance validation connects implementation to specification *)
 
 Lemma rukh_find_path_distance_sound : forall b from dr df to n n',
   rukh_find_path_distance b from dr df to n = Some n' ->
@@ -3710,7 +3873,7 @@ Proof.
       apply offset_compose with p; assumption.
 Qed.
 
-(** Helper: rukh_find_path_distance ensures path is clear *)
+(** Path clearance guarantee for intermediate positions *)
 Lemma rukh_find_path_distance_path_clear : forall b from dr df to n n',
   rukh_find_path_distance b from dr df to n = Some n' ->
   forall k, (0 < k < n')%nat ->
@@ -3771,7 +3934,7 @@ Proof.
 Qed.
 
 
-(** * BAIDAQ (Pawn) Movement *)
+(** * 7.9 Baidaq (Pawn) Movement Rules *)
 
 Definition baidaq_at_promotion_rank (p: Position) (c: Color) : bool :=
   match c with
@@ -3779,7 +3942,7 @@ Definition baidaq_at_promotion_rank (p: Position) (c: Color) : bool :=
   | Black => if rank_eq_dec (pos_rank p) rank1 then true else false
   end.
 
-(** * Helper Lemmas for Baidaq Promotion *)
+(** Baidaq promotion rank detection lemmas *)
 
 Lemma baidaq_at_promotion_rank_white : forall p,
   baidaq_at_promotion_rank p White = true <-> pos_rank p = rank8.
@@ -3865,7 +4028,7 @@ Proof.
   apply baidaq_at_promotion_rank_black. exact Hprom.
 Qed.
 
-(** * Enhanced Baidaq Movement Specification with Promotion *)
+(** Baidaq movement specification with mandatory promotion *)
 
 Inductive BaidaqMoveResult : Type :=
   | RegularMove : BaidaqMoveResult
@@ -3907,7 +4070,7 @@ Definition baidaq_move_impl (b: Board) (c: Color) (from to: Position) : bool :=
   (* The movement is valid regardless of promotion - promotion is automatic when reaching the right rank *)
   basic_move.
 
-(** * Helper lemmas for proving soundness with promotion *)
+(** Soundness lemmas for Baidaq movement with promotion *)
 
 Lemma baidaq_move_result_promotion : forall to c,
   baidaq_at_promotion_rank to c = true ->
@@ -3990,7 +4153,7 @@ Proof.
     + rewrite Hbto. apply negb_true_iff. apply Color_beq_neq. exact Hcolor.
 Qed.
 
-(** * Unified Piece Movement *)
+(** * 7.10 Unified Piece Movement Dispatch *)
 
 Definition can_move_piece (b: Board) (pc: Piece) (from to: Position) : bool :=
   let c := piece_color pc in
@@ -4003,7 +4166,7 @@ Definition can_move_piece (b: Board) (pc: Piece) (from to: Position) : bool :=
   | Baidaq => baidaq_move_impl b c from to
   end.
 
-(** * Movement Properties *)
+(** * 7.11 Movement Invariants and Properties *)
 
 Lemma no_friendly_fire : forall b pc from to,
   b[from] = Some pc ->
@@ -4048,7 +4211,7 @@ Proof.
     apply negb_true_iff in Hoccupy;
     apply Color_beq_neq;
     exact Hoccupy.
-  - (* Rukh - NEW IMPLEMENTATION *)
+  - (* Rukh case *)
     apply existsb_exists in Hmove.
     destruct Hmove as [dir [Hin Hmatch]].
     remember (rukh_find_path_distance b from (fst dir) (snd dir) to rukh_max_distance) as path_result.
@@ -4158,7 +4321,7 @@ Proof.
         subst p. exists dr, df. exact Hoff.
 Qed.
 
-(** * Validation Examples *)
+(** * 7.12 Movement Validation Examples *)
 
 Example shah_one_square : forall b c from to,
   shah_move_impl b c from to = true ->
@@ -4299,7 +4462,7 @@ Proof.
       * destruct Hin as [H'|[H'|[]]]; injection H'; intros <- <-; simpl; split; ring.
 Qed.
 
-(** * Validation Examples for Baidaq Promotion *)
+(** * 7.13 Baidaq Promotion Validation *)
 
 Example baidaq_white_promotion_on_move : forall b from,
   pos_rank from = rank7 ->
@@ -4332,7 +4495,7 @@ Proof.
   apply Himpl. exact Hprom.
 Qed.
 
-(** * Additional Movement Helpers *)
+(** * 7.14 Additional Movement Helper Functions *)
 
 Definition is_valid_move (b: Board) (from to: Position) : bool :=
   match b[from] with
@@ -4341,7 +4504,7 @@ Definition is_valid_move (b: Board) (from to: Position) : bool :=
   end.
 
 
-(** * Movement with Promotion *)
+(** * 7.15 Movement with Automatic Promotion *)
 
 Definition move_promotes_baidaq (b: Board) (c: Color) (from to: Position) : bool :=
   match b[from] with
@@ -4362,15 +4525,14 @@ Definition apply_move_with_promotion (b: Board) (from to: Position) : Board :=
   | None => b
   end.
 
-(** * Check Detection for Shah Movement *)
+(** * 7.16 Shah Movement Check Detection *)
 
-
-(** Check if moving the Shah would leave it in check *)
+(** Shah self-check detection after movement *)
 Definition shah_move_would_be_in_check (b: Board) (c: Color) (from to: Position) : bool :=
   let b_after_move := board_move b from to in
   position_under_attack_by b_after_move to (opposite_color c).
 
-(** Shah movement with check constraint *)
+(** Shah movement specification with check safety *)
 Definition shah_move_safe_spec (b: Board) (c: Color) (from to: Position) : Prop :=
   shah_move_spec b c from to /\
   shah_move_would_be_in_check b c from to = false.
@@ -4379,7 +4541,7 @@ Definition shah_move_safe_impl (b: Board) (c: Color) (from to: Position) : bool 
   shah_move_impl b c from to &&
   negb (shah_move_would_be_in_check b c from to).
 
-(** Soundness of safe Shah movement *)
+(** Soundness theorem for safe Shah movement *)
 Lemma shah_move_safe_sound : forall b c from to,
   shah_move_safe_impl b c from to = true ->
   shah_move_safe_spec b c from to.
@@ -4393,7 +4555,7 @@ Proof.
   - apply negb_true_iff in Hsafe. exact Hsafe.
 Qed.
 
-(** Completeness of safe Shah movement *)
+(** Completeness theorem for safe Shah movement *)
 Lemma shah_move_safe_complete : forall b c from to,
   shah_move_safe_spec b c from to ->
   shah_move_safe_impl b c from to = true.
@@ -4405,7 +4567,7 @@ Proof.
   - apply negb_true_iff. exact Hsafe.
 Qed.
 
-(** Example: Safe Shah movement prevents moving into check *)
+(** Safe Shah movement guarantees no self-check *)
 Example shah_safe_no_check : forall b c from to,
   shah_move_safe_impl b c from to = true ->
   let b' := board_move b from to in
@@ -4419,9 +4581,7 @@ Proof.
   unfold b'. exact Hsafe.
 Qed.
 
-(** * End of Section 7: Piece Movement Rules *)
-
-(** All piece movement rules working together *)
+(** * 7.17 Comprehensive Movement Test Suite *)
 
 Definition comprehensive_test_board : Board :=
   fun pos =>
@@ -4840,7 +5000,7 @@ Proof.
     + unfold attacks. rewrite Hbfrom, Htype. exact H.
 Qed.
 
-(** * Completeness Lemmas for Attacks *)
+(** * 9.2 Completeness Lemmas for Attack Detection *)
 
 (** Completeness for Shah attacks *)
 Lemma attacks_shah_complete : forall b from to,
@@ -4929,7 +5089,7 @@ Proof.
     destruct (position_eq_dec to to); [reflexivity|contradiction].
 Qed.
 
-(** Helper lemma: rukh_find_path_distance succeeds for unit vectors *)
+(** Rukh path distance computation succeeds for unit directional vectors *)
 Lemma rukh_find_path_unit_step : forall b from dr df to,
   (dr = 1 \/ dr = -1 \/ dr = 0) ->
   (df = 1 \/ df = -1 \/ df = 0) ->
@@ -4942,7 +5102,7 @@ Proof.
   rewrite position_beq_refl. reflexivity.
 Qed.
 
-(** Lemma: rukh_find_path_distance finds immediate neighbors *)
+(** Rukh path distance identifies adjacent positions with distance 1 *)
 Lemma rukh_find_immediate : forall b from dr df to fuel,
   (fuel > 0)%nat ->
   offset from dr df = Some to ->
@@ -4954,7 +5114,7 @@ Proof.
   - simpl. rewrite Hoff. rewrite position_beq_refl. reflexivity.
 Qed.
 
-(** Rukh completeness for distance 1 *)
+(** Completeness theorem for single-step Rukh attacks *)
 Lemma attacks_rukh_complete_dist1 : forall b from to,
   match b[from] with
   | Some pc => 
@@ -4973,7 +5133,7 @@ Proof.
   exact Hval.
 Qed.
 
-(** Example: White Ferz can attack diagonally *)
+(** Ferz diagonal attack capability validation *)
 Example ferz_attacks_diagonal :
   let b := fun pos =>
     if position_beq pos (mkPosition rank4 fileE) then Some white_ferz
@@ -4983,9 +5143,9 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** * 9.2 Position Under Attack Detection *)
+(** * 9.3 Position Under Attack Detection *)
 
-(** Check if a position is attacked by any piece of the given color *)
+(** Aggregate attack detection from all pieces of specified color *)
 Definition is_attacked (b: Board) (pos: Position) (by_color: Color) : bool :=
   existsb (fun from => 
     match b[from] with
@@ -4995,7 +5155,7 @@ Definition is_attacked (b: Board) (pos: Position) (by_color: Color) : bool :=
              (attacks b from pos)
     end) enum_position.
 
-(** Example: Position attacked by white rukh *)
+(** Rukh orthogonal attack detection validation *)
 Example position_attacked_by_rukh :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
@@ -5005,16 +5165,16 @@ Proof.
   reflexivity.
 Qed.
 
-(** * 9.3 Check Detection *)
+(** * 9.4 Check Detection *)
 
-(** Check if a color's Shah is under attack *)
+(** Shah threat detection for specified color *)
 Definition in_check (b: Board) (c: Color) : bool :=
   match find_shah b c with
   | None => false  (* No Shah found - shouldn't happen in well-formed board *)
   | Some shah_pos => is_attacked b shah_pos (opposite_color c)
   end.
 
-(** Example: White Shah in check from Black Rukh *)
+(** Shah check detection from opposing Rukh *)
 Example shah_in_check_from_rukh :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -5025,9 +5185,9 @@ Proof.
   reflexivity.
 Qed.
 
-(** * 9.4 Validation Examples *)
+(** * 9.5 Check Detection Validation *)
 
-(** Simpler validation: if find_shah succeeds, in_check correctly detects attacks *)
+(** Correspondence between Shah location and check detection *)
 Example check_detection_simple : forall b c pos,
   find_shah b c = Some pos ->
   in_check b c = true <-> is_attacked b pos (opposite_color c) = true.
@@ -5038,7 +5198,7 @@ Proof.
   split; intro; assumption.
 Qed.
 
-(** Example: Baidaq only attacks diagonally, not forward *)
+(** Baidaq diagonal-only attack pattern validation *)
 Example baidaq_attack_diagonal_only :
   let b := fun pos =>
     if position_beq pos (mkPosition rank2 fileE) then Some white_baidaq
@@ -5049,7 +5209,7 @@ Proof.
   split; reflexivity.
 Qed.
 
-(** Example: Shah cannot be in check from friendly pieces *)
+(** Friendly piece check immunity validation *)
 Example no_check_from_friendly :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -5060,7 +5220,7 @@ Proof.
   reflexivity.
 Qed.
 
-(** * Advanced Tactical Examples *)
+(** * 9.6 Advanced Tactical Position Analysis *)
 
 (** 
    A complex position demonstrating interaction between movement and threats:
@@ -5086,27 +5246,27 @@ Example section9_pin_and_alfil_color_binding :
     else if position_beq pos (mkPosition rank3 fileD) then Some black_faras
     else if position_beq pos (mkPosition rank3 fileG) then Some black_alfil
     else None in
-  (* Movement validation says Ferz CAN move *)
+  (* Ferz movement is mechanically valid *)
   (can_move_piece b white_ferz (mkPosition rank2 fileE) (mkPosition rank3 fileF) = true) /\
-  (* But moving would expose Shah to check from Rukh *)
+  (* Movement results in discovered check from Rukh *)
   (let b_after_ferz_move := 
      fun pos =>
        if position_beq pos (mkPosition rank2 fileE) then None
        else if position_beq pos (mkPosition rank3 fileF) then Some white_ferz
        else b pos in
    in_check b_after_ferz_move White = true) /\
-  (* White Alfil CAN reach e3 (both are light squares) - shows color binding *)
+  (* Alfil reaches e3 demonstrating same-color square constraint *)
   (attacks b (mkPosition rank1 fileC) (mkPosition rank3 fileE) = true) /\
-  (* But White Alfil cannot reach d2 (different color square) *)
+  (* Alfil cannot reach d2 due to opposite-color square *)
   (attacks b (mkPosition rank1 fileC) (mkPosition rank2 fileD) = false) /\
-  (* Black Faras attacks both c1 and e1 (fork) *)
+  (* Faras creates fork attacking c1 and e1 simultaneously *)
   (attacks b (mkPosition rank3 fileD) (mkPosition rank1 fileC) = true) /\
   (attacks b (mkPosition rank3 fileD) (mkPosition rank1 fileE) = true) /\
-  (* Black Alfil on g3 can leap to e1 *)
+  (* Alfil at g3 achieves two-square diagonal leap to e1 *)
   (attacks b (mkPosition rank3 fileG) (mkPosition rank1 fileE) = true) /\
-  (* White IS in check from Black Alfil (g3 to e1 is exactly 2 diagonal) *)
+  (* White Shah in check from Black Alfil via two-square diagonal leap *)
   (in_check b White = true) /\
-  (* But Black threatens multiple pieces *)
+  (* Black pieces create multiple simultaneous threats *)
   (is_attacked b (mkPosition rank1 fileC) Black = true).
 Proof.
   repeat split; reflexivity.
@@ -5128,18 +5288,18 @@ Example section9_double_check_scenario :
       if position_beq pos (mkPosition rank2 fileE) then None
       else if position_beq pos (mkPosition rank3 fileD) then Some white_ferz
       else b pos in
-  (* Original position: Shah in check from Alfil only *)
+  (* Initial position establishes single check from Alfil *)
   (in_check b White = true) /\
-  (* After Ferz moves: Shah would be in check from BOTH Rukh and Alfil *)
+  (* Post-movement position creates double check from Rukh and Alfil *)
   (attacks b_after_ferz_moves (mkPosition rank8 fileE) (mkPosition rank1 fileE) = true) /\
   (attacks b_after_ferz_moves (mkPosition rank3 fileG) (mkPosition rank1 fileE) = true) /\
-  (* This is a double check situation - both pieces attack the Shah *)
+  (* Double check configuration with simultaneous attacks on Shah *)
   (is_attacked b_after_ferz_moves (mkPosition rank1 fileE) Black = true).
 Proof.
   repeat split; reflexivity.
 Qed.
 
-(** * 9.5 Formal Verification of Shah Safety *)
+(** * 9.7 Formal Verification of Shah Safety Invariants *)
 
 (** 
    This theorem formally proves that the shah_move_impl function 
@@ -5153,9 +5313,9 @@ Theorem shah_never_moves_into_check : forall b c from to,
 Proof.
   intros b c from to H.
   unfold shah_move_impl in H.
-  (* shah_move_impl is a conjunction of three conditions *)
+  (* Decomposition of shah_move_impl into three conjunctive conditions *)
   apply andb_prop in H. destruct H as [H_move_and_occupy H_no_check].
-  (* The third conjunct directly gives us what we need *)
+  (* Third conjunct provides required safety condition *)
   apply negb_true_iff in H_no_check.
   exact H_no_check.
 Qed.
@@ -5185,7 +5345,7 @@ Example shah_cannot_move_to_attacked_square :
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
     else if position_beq pos (mkPosition rank2 fileF) then Some black_rukh
     else None in
-  (* Shah at e1 cannot move to f1 because it's attacked by rukh at f2 *)
+  (* Shah movement from e1 to f1 blocked by Rukh attack from f2 *)
   shah_move_impl b White (mkPosition rank1 fileE) (mkPosition rank1 fileF) = false.
 Proof.
   simpl.
@@ -5220,8 +5380,8 @@ Example shah_comprehensive_safety :
     else if position_beq pos (mkPosition rank4 fileA) then Some black_rukh
     else if position_beq pos (mkPosition rank2 fileC) then Some black_alfil  (* Alfil at c2 can leap to e4 *)
     else None in
-  (* Shah at e4 with rukh on a4 and alfil on c2 *)
-  (* Cannot move to d4 or f4 (attacked by rukh) *)
+  (* Position configuration: Shah e4, Rukh a4, Alfil c2 *)
+  (* Horizontal movement to d4/f4 prevented by Rukh attack coverage *)
   (shah_move_impl b White (mkPosition rank4 fileE) (mkPosition rank4 fileD) = false) /\
   (shah_move_impl b White (mkPosition rank4 fileE) (mkPosition rank4 fileF) = false) /\
   (* Can move to e5 (safe from both) *)
@@ -5239,7 +5399,7 @@ Qed.
 *)
 Example theorem_application_comprehensive :
   forall b c from to,
-    (* Our main theorem states: *)
+    (* Application of primary safety theorem *)
     shah_move_impl b c from to = true ->
     shah_move_would_leave_in_check b c from to = false.
 Proof.
@@ -5248,7 +5408,7 @@ Proof.
   exact H.
 Qed.
 
-(** * 9.6 Pass-Through Check Handling *)
+(** * 9.8 Pass-Through Check Analysis *)
 
 (**
    Generalized pass-through check detection for completeness.
@@ -5278,16 +5438,16 @@ Definition calculate_direction (from to: Position) : option (Z * Z) :=
   let dr := rankZ to - rankZ from in
   let df := fileZ to - fileZ from in
   if andb (Z.eqb dr 0) (Z.eqb df 0) then
-    None  (* Same position *)
+    None  (* Identity case: from equals to *)
   else if Z.eqb dr 0 then
-    Some (0, if Z.ltb df 0 then -1 else 1)  (* Horizontal *)
+    Some (0, if Z.ltb df 0 then -1 else 1)  (* Horizontal movement vector *)
   else if Z.eqb df 0 then
-    Some (if Z.ltb dr 0 then -1 else 1, 0)  (* Vertical *)
+    Some (if Z.ltb dr 0 then -1 else 1, 0)  (* Vertical movement vector *)
   else if Z.eqb (Z.abs dr) (Z.abs df) then
     Some (if Z.ltb dr 0 then -1 else 1,
-          if Z.ltb df 0 then -1 else 1)  (* Diagonal *)
+          if Z.ltb df 0 then -1 else 1)  (* Diagonal movement vector *)
   else
-    None.  (* Not a straight line *)
+    None.  (* Non-linear movement path *)
 
 (** Generate all intermediate positions between from and to *)
 Definition generate_path_positions (from to: Position) : list Position :=
@@ -5297,7 +5457,7 @@ Definition generate_path_positions (from to: Position) : list Position :=
       let max_steps := Z.to_nat (Z.max (Z.abs (rankZ to - rankZ from))
                                        (Z.abs (fileZ to - fileZ from))) in
       let all_positions := generate_intermediate_positions_aux from dr df max_steps in
-      (* Remove the destination from the path *)
+      (* Exclude destination position from intermediate path *)
       list_remove position_eq_dec to all_positions
   end.
 
@@ -5306,7 +5466,7 @@ Definition path_is_safe (b: Board) (from to: Position) (c: Color) : bool :=
   let intermediate_positions := generate_path_positions from to in
   negb (path_passes_through_check b from to intermediate_positions c).
 
-(** Helper lemma: Empty path is always safe *)
+(** Empty path contains no threatened positions *)
 Lemma empty_path_safe : forall b from to c,
   path_passes_through_check b from to nil c = false.
 Proof.
@@ -5315,7 +5475,7 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** Helper: Shah moves are always distance 1 *)
+(** Shah movement maintains unit Chebyshev distance *)
 Lemma shah_move_distance_one : forall b c from to,
   shah_move_impl b c from to = true ->
   chebyshev_distance from to = 1.
@@ -5349,7 +5509,7 @@ Qed.
 Example adjacent_squares_no_intermediate :
   let from := mkPosition rank4 fileE in
   let to := mkPosition rank4 fileF in
-  (* Adjacent squares have no intermediate positions *)
+  (* Adjacent positions lack intermediate squares *)
   generate_path_positions from to = nil.
 Proof.
   compute. reflexivity.
@@ -5364,7 +5524,7 @@ Example pass_through_check_demonstration :
   let from := mkPosition rank1 fileA in
   let to := mkPosition rank1 fileH in
   let path := generate_path_positions from to in
-  (* The path includes e1 which is under attack *)
+  (* Path traverses e1 position under threat *)
   existsb (fun p => position_beq p (mkPosition rank1 fileE)) path = true.
 Proof.
   compute. reflexivity.
@@ -5389,7 +5549,7 @@ Record GameState : Type := mkGameState {
   draw_offer_pending : bool  (* Optional: track draw offers *)
 }.
 
-(** Note: No en_passant or castling_rights fields needed for Shatranj *)
+(** Shatranj-specific: No en_passant or castling_rights required *)
 
 (** * 10.2 Initial Game State *)
 
@@ -5405,9 +5565,9 @@ Definition initial_game_state : GameState := mkGameState
 (** A well-formed game state must satisfy key invariants *)
 Definition WellFormedState (st: GameState) : bool :=
   let b := board st in
-  (* Both colors must have exactly one Shah *)
+  (* Invariant: exactly one Shah per color *)
   andb (valid_shah_count b)
-       (* Valid piece counts - max 8 Baidaqs per color *)
+       (* Constraint: maximum 8 Baidaqs per color *)
        (valid_piece_counts b).
 
 (** * 10.4 Validation Examples *)
@@ -5438,8 +5598,8 @@ Definition switch_turn (st: GameState) : GameState :=
 (** Update halfmove clock based on move type *)
 Definition update_halfmove_clock (st: GameState) (is_capture: bool) (is_baidaq_move: bool) : nat :=
   if orb is_capture is_baidaq_move
-  then 0  (* Reset on capture or Baidaq move *)
-  else S (halfmove_clock st).  (* Increment otherwise *)
+  then 0  (* Reset clock on capture or Baidaq advance *)
+  else S (halfmove_clock st).  (* Increment clock for other moves *)
 
 (** * 10.6 State Query Functions *)
 
@@ -5493,7 +5653,7 @@ Qed.
 
 (** * 10.8 State Invariant Properties *)
 
-(** Critical: A well-formed state never has a captured Shah *)
+(** Fundamental invariant: Shah capture impossible in well-formed state *)
 Theorem shah_never_captured : forall st,
   WellFormedState st = true ->
   shah_count (board st) White = 1 /\
@@ -5560,7 +5720,7 @@ Proof.
   intros st Hwf.
   unfold WellFormedState in *.
   unfold switch_turn. simpl.
-  (* The board doesn't change, so all piece counts remain valid *)
+  (* Board state preservation maintains piece count invariants *)
   exact Hwf.
 Qed.
 
@@ -5647,9 +5807,9 @@ Inductive Move : Type :=
   | DrawOffer : Move                            (* Propose a draw *)
   | DrawAccept : Move.                          (* Accept a draw offer *)
 
-(** Note: No castling or en passant in Shatranj *)
+(** Shatranj-specific exclusions: no castling or en passant moves *)
 
-(** Example: Common opening move - Baidaq from e2 to e3 *)
+(** Classical opening move: central Baidaq advance e2-e3 *)
 Example white_baidaq_opening : Move :=
   Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE).
 
@@ -5734,13 +5894,13 @@ Qed.
 
 (** * 11.5 Classical Shatranj Opening *)
 
-(** Historical opening: The Tabiya of the Center - moving baidaqs to control center *)
+(** Classical Tabiya formation: central Baidaq deployment for board control *)
 Example classical_center_opening :
   let e2e3 := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
   let d7d6 := Normal (mkPosition rank7 fileD) (mkPosition rank6 fileD) in
   let d2d3 := Normal (mkPosition rank2 fileD) (mkPosition rank3 fileD) in
   let e7e6 := Normal (mkPosition rank7 fileE) (mkPosition rank6 fileE) in
-  (* All moves have correct source and destination *)
+  (* Validation of source and destination positions for all moves *)
   (move_from e2e3 = Some (mkPosition rank2 fileE)) /\
   (move_to e2e3 = Some (mkPosition rank3 fileE)) /\
   (move_from d7d6 = Some (mkPosition rank7 fileD)) /\
@@ -5864,7 +6024,7 @@ Proof.
   - right. reflexivity.
 Qed.
 
-(** Baidaq promotion is the only case where same position move could be different types *)
+(** Semantic distinction: identical positions yield different move types for Baidaq promotion *)
 Example promotion_vs_normal_same_squares :
   let from := mkPosition rank7 fileE in
   let to := mkPosition rank8 fileE in
@@ -5990,20 +6150,20 @@ Proof.
   reflexivity.
 Qed.
 
-(** Meaningful property: Same squares can have different semantic moves *)
+(** Move type distinction theorem: position identity with semantic difference *)
 Theorem move_semantic_distinction : forall from to,
   pos_rank from = rank7 ->
   pos_rank to = rank8 ->
   let normal := Normal from to in
   let promo := Promotion from to in
-  (* Same positions *)
+  (* Position identity between move types *)
   (move_from normal = move_from promo) /\
   (move_to normal = move_to promo) /\
-  (* Same distance *)
+  (* Distance equivalence between move types *)
   (move_distance normal = move_distance promo) /\
-  (* But different moves with different game effects *)
+  (* Distinct move types with divergent game semantics *)
   (normal <> promo) /\
-  (* And different classifications *)
+  (* Divergent type classifications *)
   (is_normal_move normal = true /\ is_promotion promo = true) /\
   (is_promotion normal = false /\ is_normal_move promo = false).
 Proof.
@@ -6149,27 +6309,27 @@ Close Scope Z_scope.
 Definition legal_move_spec (st: GameState) (m: Move) : Prop :=
   match m with
   | Normal from to | Promotion from to =>
-      (* 1. Check piece ownership - correct color *)
+      (* Validation step 1: Verify piece ownership corresponds to active player *)
       match (board st)[from] with
       | None => False
       | Some pc => 
           piece_color pc = turn st /\
-          (* 2. Check basic movement pattern - piece-specific *)
+          (* Validation step 2: Verify piece-specific movement patterns *)
           can_move_piece (board st) pc from to = true /\
-          (* 3. Path clearance is checked inside can_move_piece for sliding pieces *)
-          (* 4. Destination validation - empty or opponent piece *)
+          (* Validation step 3: Path clearance validation embedded in can_move_piece *)
+          (* Validation step 4: Destination square occupancy constraints *)
           (match (board st)[to] with
            | None => True
            | Some target => piece_color target <> turn st
            end) /\
-          (* 5. No self-check after move *)
+          (* Validation step 5: Self-check prevention constraint *)
           let b_after := board_move (board st) from to in
           (match find_shah b_after (turn st) with
            | None => False  (* Shah must exist *)
            | Some shah_pos => 
                position_under_attack_by b_after shah_pos (opposite_color (turn st)) = false
            end) /\
-          (* 6. Special rules: Baidaq reaching 8th rank must promote *)
+          (* Validation step 6: Mandatory Baidaq promotion at terminal rank *)
           (piece_type pc = Baidaq /\ baidaq_at_promotion_rank to (turn st) = true ->
            m = Promotion from to)
       end
@@ -6182,11 +6342,11 @@ Definition legal_move_spec (st: GameState) (m: Move) : Prop :=
 Example legal_move_spec_basic_example :
   let st := initial_game_state in
   let m := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
-  (* This move should satisfy the spec because:
-     - There's a white baidaq at e2
-     - White's turn
-     - e3 is empty
-     - No self-check results *)
+  (* Movement validation criteria:
+     - White Baidaq present at e2
+     - Active player is White
+     - Target square e3 unoccupied
+     - No self-check condition created *)
   exists pc, 
     (board st)[mkPosition rank2 fileE] = Some pc /\
     piece_color pc = White /\
@@ -6202,17 +6362,17 @@ Qed.
 Definition legal_move_impl (st: GameState) (m: Move) : bool :=
   match m with
   | Normal from to | Promotion from to =>
-      (* Step 1: Check piece ownership *)
+      (* Ownership validation phase *)
       match (board st)[from] with
       | None => false
       | Some pc => 
-          (* Correct color? *)
+          (* Color correspondence check *)
           andb (Color_beq (piece_color pc) (turn st))
-          (* Step 2: Basic movement pattern *)
+          (* Movement pattern validation phase *)
           (andb (can_move_piece (board st) pc from to)
-          (* Step 3: Path clearance handled in can_move_piece *)
-          (* Step 4: Destination check handled in can_move_piece *)
-          (* Step 5: No self-check after move *)
+          (* Path clearance validation embedded in can_move_piece *)
+          (* Destination occupancy validation embedded in can_move_piece *)
+          (* Self-check prevention phase *)
           (let b_after := board_move (board st) from to in
            match find_shah b_after (turn st) with
            | None => false  (* Should never happen in well-formed state *)
@@ -6243,7 +6403,7 @@ Qed.
 Example black_cannot_move_on_white_turn :
   let st := initial_game_state in
   let m := Normal (mkPosition rank7 fileE) (mkPosition rank6 fileE) in
-  (* Black's e7 baidaq cannot move because it's White's turn *)
+  (* Black Baidaq movement prohibited during White's turn *)
   legal_move_impl st m = false.
 Proof.
   simpl.
@@ -6279,7 +6439,7 @@ Definition apply_move_impl (st: GameState) (m: Move) : option GameState :=
                   (if Color_beq (turn st) Black 
                    then S (fullmove_number st) 
                    else fullmove_number st)
-                  false)  (* Clear draw offer *)
+                  false)  (* Draw offer state reset *)
       end
   | Resignation _ => None  (* Game ends *)
   | DrawOffer => Some (mkGameState 
@@ -6382,7 +6542,7 @@ Example cannot_move_shah_into_rukh_attack :
     else if position_beq pos (mkPosition rank8 fileF) then Some black_rukh
     else None in
   let st := mkGameState b White 0 1 false in
-  (* White Shah at e1 cannot move to f1 because Black Rukh at f8 attacks it *)
+  (* Shah movement to f1 prevented by Black Rukh threat from f8 *)
   legal_move_impl st (Normal (mkPosition rank1 fileE) (mkPosition rank1 fileF)) = false.
 Proof.
   simpl.
@@ -6476,7 +6636,7 @@ Proof.
   - reflexivity.
 Qed.
 
-(** Legal_move_impl checks the actual result board *)
+(** Legal move validation examines post-movement board configuration *)
 Lemma legal_move_impl_checks_result_board : forall st from to pc,
   (board st)[from] = Some pc ->
   legal_move_impl st (Normal from to) = true ->
@@ -6524,11 +6684,11 @@ Qed.
 Definition legal_move_impl_safe (st: GameState) (m: Move) : bool :=
   match m with
   | Normal from to | Promotion from to =>
-      (* First check: Cannot capture Shah *)
+      (* Primary constraint: Shah capture prohibition *)
       andb (negb (contains_shah (board st) to))
-           (* Then do all other checks *)
+           (* Secondary validations cascade *)
            (legal_move_impl st m)
-  | _ => legal_move_impl st m  (* For non-board moves, use original *)
+  | _ => legal_move_impl st m  (* Non-board moves delegate to standard validation *)
   end.
 
 (** Example: Rukh cannot capture opponent's Shah even if physically possible *)
@@ -6538,13 +6698,13 @@ Example rukh_cannot_capture_shah :
     else if position_beq pos (mkPosition rank1 fileH) then Some black_shah
     else None in
   let st := mkGameState b White 0 1 false in
-  (* White Rukh at a1 trying to capture Black Shah at h1 *)
+  (* Attempted Shah capture by White Rukh from a1 to h1 *)
   let m := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileH) in
-  (* The move is physically possible (rukh can move there) *)
+  (* Movement mechanically valid for Rukh trajectory *)
   (can_move_piece b white_rukh (mkPosition rank1 fileA) (mkPosition rank1 fileH) = true) /\
-  (* But it's illegal because it would capture the Shah *)
+  (* Legality violation due to Shah capture prohibition *)
   (legal_move_impl_safe st m = false) /\
-  (* Specifically because of Shah capture prevention *)
+  (* Shah presence confirmation at target square *)
   (contains_shah b (mkPosition rank1 fileH) = true).
 Proof.
   split; [|split]; reflexivity.
@@ -6743,15 +6903,15 @@ Proof.
   intro Heq. apply H. symmetry. exact Heq.
 Qed.
 
-(** * 12.10 Landmark: The Pinned Piece Theorem *)
+(** * 12.10 The Pinned Piece Theorem *)
 
-(** A piece is pinned if moving it would expose its own Shah to check *)
+(** Piece pinning occurs when movement would expose allied Shah to threat *)
 Definition is_pinned (st: GameState) (pos: Position) : bool :=
   match (board st)[pos] with
   | None => false
   | Some pc =>
       if Color_beq (piece_color pc) (turn st) then
-        (* Check if ANY move from this position would leave Shah in check *)
+        (* Verification of Shah exposure for all possible movements *)
         negb (existsb (fun dest => 
           andb (can_move_piece (board st) pc pos dest)
                (legal_move_impl st (Normal pos dest))
@@ -6759,13 +6919,13 @@ Definition is_pinned (st: GameState) (pos: Position) : bool :=
       else false
   end.
 
-(** The Absolute Pin: A piece that cannot move at all without exposing Shah *)
+(** Absolute pin definition: piece immobilized due to Shah protection requirement *)
 Definition is_absolutely_pinned (st: GameState) (pos: Position) : bool :=
   match (board st)[pos] with
   | None => false
   | Some pc =>
       if Color_beq (piece_color pc) (turn st) then
-        andb (negb (PieceType_beq (piece_type pc) Shah))  (* Not the Shah itself *)
+        andb (negb (PieceType_beq (piece_type pc) Shah))  (* Shah exclusion from pin definition *)
              (forallb (fun dest =>
                 implb (can_move_piece (board st) pc pos dest)
                       (negb (legal_move_impl st (Normal pos dest)))
@@ -6773,7 +6933,7 @@ Definition is_absolutely_pinned (st: GameState) (pos: Position) : bool :=
       else false
   end.
 
-(** Helper: Extract implication from forallb with implb *)
+(** Implication extraction lemma for universal quantification with boolean implication *)
 Lemma forallb_implb_extract : forall {A} (f g : A -> bool) (l : list A) (x : A),
   forallb (fun y => implb (f y) (g y)) l = true ->
   In x l ->
@@ -6788,7 +6948,7 @@ Proof.
   exact Hforall.
 Qed.
 
-(** Helper: If is_absolutely_pinned, then forallb condition holds *)
+(** Absolute pin implies universal illegality of movement *)
 Lemma absolutely_pinned_forallb : forall st pos pc,
   (board st)[pos] = Some pc ->
   piece_color pc = turn st ->
@@ -6819,21 +6979,21 @@ Proof.
   split; assumption.
 Qed.
 
-(** Theorem: A piece that has no legal moves cannot move to any destination *)
+(** Movement impossibility theorem for legally constrained pieces *)
 Theorem no_legal_moves_theorem : forall st pos pc,
   WellFormedState st = true ->
   (board st)[pos] = Some pc ->
   piece_color pc = turn st ->
-  (* If no destination is legal *)
+  (* Universal illegality hypothesis *)
   (forall dest, legal_move_impl st (Normal pos dest) = false) ->
-  (* Then specifically, any given destination is illegal *)
+  (* Conclusion: arbitrary destination illegality *)
   forall dest, legal_move_impl st (Normal pos dest) = false.
 Proof.
   intros st pos pc Hwf Hpc Hcolor Hall_illegal dest.
   apply Hall_illegal.
 Qed.  
 
-(** Concrete Example: Classic Rukh Pin in Action *)
+(** Classical Rukh pin demonstration *)
 Example classic_pin_demonstration :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -6841,7 +7001,7 @@ Example classic_pin_demonstration :
     else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
     else None in
   let st := mkGameState b White 0 1 false in
-  (* The White Ferz cannot legally move to any of its normal squares *)
+  (* White Ferz movement universally prohibited to all standard destinations *)
   (legal_move_impl st (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileF)) = false) /\
   (legal_move_impl st (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileD)) = false) /\
   (legal_move_impl st (Normal (mkPosition rank2 fileE) (mkPosition rank1 fileF)) = false) /\
@@ -6850,7 +7010,7 @@ Proof.
   repeat split; compute; reflexivity.
 Qed.
 
-(** The Famous Shatranj Pin Pattern: Rukh pinning Ferz to Shah *)
+(** Historical Shatranj pin pattern: Rukh-Ferz-Shah alignment *)
 Example classic_rukh_pin_pattern :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -6858,7 +7018,7 @@ Example classic_rukh_pin_pattern :
     else if position_beq pos (mkPosition rank8 fileE) then Some black_rukh
     else None in
   let st := mkGameState b White 0 1 false in
-  (* The White Ferz is absolutely pinned *)
+  (* White Ferz exhibits absolute pin condition *)
   is_absolutely_pinned st (mkPosition rank2 fileE) = true.
 Proof.
   unfold is_absolutely_pinned. simpl.
@@ -6868,15 +7028,15 @@ Qed.
 
 (** * 12.11 Bare King Detection *)
 
-(** Check if a player has achieved bare king (opponent has only Shah left) *)
+(** Bare king victory condition detection: opponent reduced to solitary Shah *)
 Definition bare_king_check (st: GameState) : option Color :=
   let white_pieces := count_pieces (board st) White in
   let black_pieces := count_pieces (board st) Black in
-  if Nat.eqb white_pieces 1 then Some Black  (* Black wins - White is bare *)
-  else if Nat.eqb black_pieces 1 then Some White  (* White wins - Black is bare *)
+  if Nat.eqb white_pieces 1 then Some Black  (* Black victory via White bare king *)
+  else if Nat.eqb black_pieces 1 then Some White  (* White victory via Black bare king *)
   else None.
 
-(** Example: Classic endgame where Black has bared White's king *)
+(** Classical endgame position demonstrating Black's bare king achievement *)
 Example bare_king_endgame :
   let b := fun pos =>
     if position_beq pos (mkPosition rank4 fileE) then Some white_shah
@@ -6885,10 +7045,10 @@ Example bare_king_endgame :
     else if position_beq pos (mkPosition rank3 fileH) then Some black_faras
     else None in
   let st := mkGameState b Black 45 80 false in
-  (* White has only Shah, Black has Shah + Rukh + Faras *)
+  (* Material distribution: White reduced to Shah, Black retains Shah, Rukh, Faras *)
   (count_pieces b White = 1) /\
   (count_pieces b Black = 3) /\
-  (bare_king_check st = Some Black).  (* Black has achieved bare king *)
+  (bare_king_check st = Some Black).  (* Black bare king victory confirmed *)
 Proof.
   split; [|split].
   - (* White piece count *)
@@ -6899,14 +7059,14 @@ Proof.
     unfold bare_king_check. simpl. reflexivity.
 Qed.
 
-(** Check if the current player can immediately counter-bare their opponent *)
+(** Counter-bare capability assessment for active player *)
 Definition can_counter_bare (st: GameState) : bool :=
-  (* Can only counter-bare if we're currently bare *)
+  (* Counter-bare prerequisite: current bare king state *)
   match bare_king_check st with
   | Some winner =>
-      if Color_beq winner (turn st) then false  (* We already won *)
+      if Color_beq winner (turn st) then false  (* Victory already achieved *)
       else
-        (* Check if any of our moves would bare opponent *)
+        (* Evaluation of moves resulting in opponent bare king *)
         existsb (fun move_pair =>
           let from := fst move_pair in
           let to := snd move_pair in
@@ -6915,32 +7075,32 @@ Definition can_counter_bare (st: GameState) : bool :=
           | Some pc =>
               if Color_beq (piece_color pc) (turn st) then
                 if can_move_piece (board st) pc from to then
-                  (* Check if this capture would bare opponent *)
+                  (* Capture consequence analysis for bare king creation *)
                   let b_after := board_move (board st) from to in
                   Nat.eqb (count_pieces b_after (opposite_color (turn st))) 1
                 else false
               else false
           end
         ) (list_prod enum_position enum_position)
-  | None => false  (* Not in bare king situation *)
+  | None => false  (* Bare king condition absent *)
   end.
 
-(** Example: Counter-bare situation - White is bare but can capture Black's last piece *)
+(** Counter-bare scenario: White's immediate reciprocal bare king opportunity *)
 Example counter_bare_possible :
   let b := fun pos =>
     if position_beq pos (mkPosition rank4 fileE) then Some white_shah
     else if position_beq pos (mkPosition rank5 fileE) then Some black_shah
-    else if position_beq pos (mkPosition rank5 fileF) then Some black_ferz  (* Can be captured by White Shah *)
+    else if position_beq pos (mkPosition rank5 fileF) then Some black_ferz  (* Within White Shah capture range *)
     else None in
   let st := mkGameState b White 0 50 false in
-  (* White is bare (only Shah) but can counter-bare by capturing Black's Ferz *)
-  (bare_king_check st = Some Black) /\  (* Black has achieved bare king *)
-  (can_counter_bare st = true).  (* But White can counter-bare immediately *)
+  (* White bare king state with counter-bare potential via Ferz capture *)
+  (bare_king_check st = Some Black) /\  (* Black bare king victory state *)
+  (can_counter_bare st = true).  (* White counter-bare capability confirmed *)
 Proof.
   split.
-  - (* bare_king_check shows Black wins *)
+  - (* Black victory determination via bare king *)
     unfold bare_king_check. simpl. reflexivity.
-  - (* can_counter_bare is true *)
+  - (* Counter-bare capability verification *)
     unfold can_counter_bare. simpl.
     unfold bare_king_check. simpl.
     unfold Color_beq. simpl.
@@ -7006,11 +7166,11 @@ Proof.
   reflexivity.
 Qed.
 
-(** Enhanced legal_move_impl that includes bare king checking *)
+(** Comprehensive legal move validation incorporating bare king rules *)
 Definition legal_move_impl_with_bare_king (st: GameState) (m: Move) : bool :=
   match m with
   | Normal from to | Promotion from to =>
-      (* First check all the basic legality conditions *)
+      (* Primary legality validation phase *)
       match (board st)[from] with
       | None => false
       | Some pc => 
@@ -7022,17 +7182,17 @@ Definition legal_move_impl_with_bare_king (st: GameState) (m: Move) : bool :=
                  | Some shah_pos => 
                      negb (position_under_attack_by b_after shah_pos (opposite_color (turn st)))
                  end)
-          (* NEW: Check bare king rule *)
+          (* Bare king rule enforcement *)
           (let b_after := board_move (board st) from to in
            let st_after := mkGameState b_after (opposite_color (turn st)) 
                                        (halfmove_clock st) (fullmove_number st) 
-                                       false in  (* Clear draw offer *)
+                                       false in  (* Draw offer state reset *)
            match bare_king_check st_after with
-           | None => true  (* Not a bare king position *)
+           | None => true  (* Non-bare-king configuration *)
            | Some winner =>
                if Color_beq winner (turn st) 
-               then negb (can_counter_bare st_after)  (* We win only if no counter-bare *)
-               else false  (* We somehow bared ourselves - illegal *)
+               then negb (can_counter_bare st_after)  (* Victory contingent on counter-bare impossibility *)
+               else false  (* Self-bare king violation *)
            end)))
       end
   | Resignation c => Color_beq c (turn st)
@@ -7040,7 +7200,7 @@ Definition legal_move_impl_with_bare_king (st: GameState) (m: Move) : bool :=
   | DrawAccept => draw_offer_pending st
   end.
 
-(** Example: The enhanced impl correctly rejects moves that allow counter-bare *)
+(** Enhanced implementation validation: counter-bare prevention mechanism *)
 Example enhanced_impl_prevents_bad_bare :
   let b := fun pos =>
     if position_beq pos (mkPosition rank4 fileE) then Some white_shah
@@ -7049,9 +7209,9 @@ Example enhanced_impl_prevents_bad_bare :
     else if position_beq pos (mkPosition rank5 fileF) then Some black_ferz
     else None in
   let st := mkGameState b White 0 50 false in
-  (* White Rukh captures Ferz, but Black Shah can immediately capture Rukh back *)
+  (* White Rukh captures Ferz with vulnerable counter-capture position *)
   let bad_move := Normal (mkPosition rank5 fileD) (mkPosition rank5 fileF) in
-  (* Original impl might allow it, but enhanced impl should reject it *)
+  (* Enhanced implementation rejects due to counter-bare vulnerability *)
   legal_move_impl_with_bare_king st bad_move = false.
 Proof.
   unfold legal_move_impl_with_bare_king.
@@ -7060,13 +7220,13 @@ Proof.
   reflexivity.
 Qed.
 
-(** Now we make the enhanced versions the official ones *)
+(** Designation of enhanced versions as canonical implementations *)
 Notation legal_move_spec_v2 := legal_move_spec_with_bare_king.
 Notation legal_move_impl_v2 := legal_move_impl_with_bare_king.
 
-(** * 12.13 Unique Bare King Invariants *)
+(** * 12.13 Bare King Uniqueness Invariants *)
 
-(** INVARIANT 1: At most one player can be bare at any time *)
+(** Invariant: Mutual exclusivity of bare king states *)
 Theorem bare_king_mutual_exclusion : forall st,
   bare_king_check st = Some White -> bare_king_check st <> Some Black.
 Proof.
@@ -7076,12 +7236,12 @@ Proof.
   destruct (Nat.eqb (count_pieces (board st) White) 1) eqn:Hw1;
   destruct (Nat.eqb (count_pieces (board st) Black) 1) eqn:Hb1;
   simpl in *; try discriminate.
-  (* The only way bare_king_check st = Some White is if Black has exactly 1 piece *)
-  (* The only way bare_king_check st = Some Black is if White has exactly 1 piece *)
-  (* But we already have bare_king_check st = Some White, contradiction *)
+  (* White victory requires Black single piece constraint *)
+  (* Black victory requires White single piece constraint *)
+  (* Contradiction: simultaneous single piece states impossible *)
 Qed.
 
-(** INVARIANT 2: Counter-bare is only possible when already bare *)
+(** Invariant: Counter-bare prerequisite of existing bare king state *)
 Theorem counter_bare_requires_being_bare : forall st,
   can_counter_bare st = true ->
   exists winner, bare_king_check st = Some winner /\ winner <> turn st.
@@ -7091,17 +7251,17 @@ Proof.
   destruct (bare_king_check st) eqn:Hbare.
   - (* Some color c *)
     destruct (Color_beq c (turn st)) eqn:Hcolor.
-    + (* c = turn st, but then can_counter_bare returns false *)
+    + (* Active player victory precludes counter-bare *)
       simpl in Hcounter. discriminate.
-    + (* c <> turn st - this is what we need *)
+    + (* Opponent victory enables counter-bare consideration *)
       exists c. split.
       * reflexivity.
       * apply Color_beq_neq. exact Hcolor.
-  - (* None - can_counter_bare returns false *)
+  - (* Absence of bare king negates counter-bare *)
     simpl in Hcounter. discriminate.
 Qed.
 
-(** INVARIANT 3: Legal moves creating bare king prevent counter-bare *)
+(** Invariant: Legal bare king creation excludes counter-bare possibility *)
 Theorem legal_bare_king_victory_sound : forall st m,
   legal_move_spec_v2 st m ->
   match m with
@@ -7134,7 +7294,7 @@ Proof.
     + contradiction.
 Qed.
 
-(** INVARIANT 4: Legal bare king moves truly end the game *)
+(** Invariant: Legal bare king establishment terminates game definitively *)
 Theorem legal_bare_king_is_game_ending : forall st m,
   legal_move_spec_v2 st m ->
   match m with
@@ -7143,18 +7303,18 @@ Theorem legal_bare_king_is_game_ending : forall st m,
       let st_after := mkGameState b_after (opposite_color (turn st))
                                   (halfmove_clock st) (fullmove_number st) false in
       bare_king_check st_after = Some (turn st) ->
-      (* If the move creates bare king and is legal, the game has ended *)
-      can_counter_bare st_after = false (* No counter-bare possible *)
+      (* Legal bare king creation guarantees game termination *)
+      can_counter_bare st_after = false (* Counter-bare impossibility confirmed *)
   | _ => True
   end.
 Proof.
-  (* This is exactly legal_bare_king_victory_sound *)
+  (* Direct application of legal_bare_king_victory_sound theorem *)
   exact legal_bare_king_victory_sound.
 Qed.
 
 (** * 12.15 Bilateral Soundness and Completeness *)
 
-(** Helper: legal_move_impl checks all conditions of legal_move_spec for Normal moves *)
+(** Legal move implementation validates all specification conditions for Normal moves *)
 Lemma legal_move_impl_normal_checks_all : forall st from to,
   legal_move_impl st (Normal from to) = true ->
   match (board st)[from] with
@@ -7177,7 +7337,7 @@ Proof.
   intros st from to H.
   unfold legal_move_impl in H.
   destruct ((board st)[from]) eqn:Hpiece; [|discriminate].
-  rename p into pc.  (* Rename to avoid conflict with position variable in lemmas *)
+  rename p into pc.  (* Variable renaming for namespace clarity *)
   apply andb_prop in H. destruct H as [Hcolor Hrest].
   apply andb_prop in Hrest. destruct Hrest as [Hmove Hcheck].
   split.
@@ -7186,11 +7346,11 @@ Proof.
     + exact Hmove.
     + split.
       * destruct ((board st)[to]) eqn:Hdest.
-        -- (* We need: piece_color p <> turn st
-              We get this from can_move_piece which checks occupied_by *)
+        -- (* Required: piece_color p <> turn st
+              Derived from can_move_piece occupied_by validation *)
            unfold can_move_piece in Hmove.
            destruct (piece_type pc) eqn:Htype.
-           ++ (* Shah case *)
+           ++ (* Shah piece type case *)
               unfold shah_move_impl in Hmove.
               apply andb_prop in Hmove. destruct Hmove as [H _].
               apply andb_prop in H. destruct H as [_ Hoccupy].
@@ -7201,7 +7361,7 @@ Proof.
               apply Color_beq_neq in Hoccupy.
               assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
               congruence.
-           ++ (* Ferz case - similar pattern *)
+           ++ (* Ferz piece type case *)
               unfold ferz_move_impl in Hmove.
               apply andb_prop in Hmove. destruct Hmove as [_ Hoccupy].
               unfold occupied_by in Hoccupy.
@@ -7211,7 +7371,7 @@ Proof.
               apply Color_beq_neq in Hoccupy.
               assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
               congruence.
-           ++ (* Alfil case *)
+           ++ (* Alfil piece type case *)
               unfold alfil_move_impl in Hmove.
               apply andb_prop in Hmove. destruct Hmove as [_ Hoccupy].
               unfold occupied_by in Hoccupy.
@@ -7221,7 +7381,7 @@ Proof.
               apply Color_beq_neq in Hoccupy.
               assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
               congruence.
-           ++ (* Faras case *)
+           ++ (* Faras piece type case *)
               unfold faras_move_impl in Hmove.
               apply andb_prop in Hmove. destruct Hmove as [_ Hoccupy].
               unfold occupied_by in Hoccupy.
@@ -7231,7 +7391,7 @@ Proof.
               apply Color_beq_neq in Hoccupy.
               assert (piece_color pc = turn st) by (apply Color_beq_eq; exact Hcolor).
               congruence.
-           ++ (* Rukh case *)
+           ++ (* Rukh piece type case *)
               unfold rukh_move_impl in Hmove.
               apply existsb_exists in Hmove.
               destruct Hmove as [dir [Hin Hmatch]].
@@ -7541,7 +7701,7 @@ Example simple_rukh_move :
     else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
     else None in
   let st := mkGameState b White 0 1 false in
-  (* White Rukh moves from a1 to a5 *)
+  (* White Rukh orthogonal movement from a1 to a5 *)
   let move := Normal (mkPosition rank1 fileA) (mkPosition rank5 fileA) in
   (* This move is legal *)
   legal_move_impl st move = true.
@@ -7549,12 +7709,12 @@ Proof.
   compute. reflexivity.
 Qed.
 
-(** * 12.18 Required Specification Validation *)
+(** * 12.18 Specification Compliance Validation *)
 
-(** Helper: Promoting a Baidaq to Ferz preserves Shah position *)
+(** Promotion to Ferz maintains Shah positional invariant *)
 Lemma promotion_preserves_shah_position : forall b pos pc c,
   piece_type pc = Ferz ->
-  (* Precondition: position doesn't contain a Shah (it was a Baidaq that moved there) *)
+  (* Precondition: target position excludes Shah presence (former Baidaq position) *)
   (forall old_pc, b[pos] = Some old_pc -> piece_type old_pc <> Shah) ->
   find_shah (board_place b pos pc) c = find_shah b c.
 Proof.
@@ -7562,41 +7722,41 @@ Proof.
   unfold find_shah.
   apply find_ext.
   intros p Hin.
-  (* We need to compare the predicates at position p *)
+  (* Predicate comparison at position p *)
   unfold board_place. simpl.
   destruct (position_eq_dec pos p).
-  - (* pos = p - the position where we placed the Ferz *)
+  - (* Position identity: Ferz placement location *)
     subst p.
     unfold is_shah.
     rewrite Hferz. simpl.
-    (* LHS: is_shah pc = false because pc is a Ferz *)
+    (* Left side: is_shah evaluates false for Ferz piece type *)
     destruct (b[pos]) as [existing_pc|] eqn:Hbpos.
-    + (* b[pos] = Some existing_pc *)
-      (* By Hno_shah, existing_pc is not a Shah *)
+    + (* Occupied position case *)
+      (* Hno_shah constraint: existing piece excludes Shah type *)
       assert (Hnot_shah: piece_type existing_pc <> Shah).
       { apply (Hno_shah existing_pc). reflexivity. }
       destruct (piece_type existing_pc) eqn:Htype; simpl.
-      * (* old_pc was a Shah - contradiction with Hnot_shah *)
+      * (* Shah case contradicts Hnot_shah constraint *)
         exfalso. apply Hnot_shah. reflexivity.
-      * (* old_pc was a Ferz *)
+      * (* Ferz piece type case *)
         reflexivity.
-      * (* old_pc was an Alfil *)
+      * (* Alfil piece type case *)
         reflexivity.
-      * (* old_pc was a Faras *)
+      * (* Faras piece type case *)
         reflexivity.
-      * (* old_pc was a Rukh *)
+      * (* Rukh piece type case *)
         reflexivity.
-      * (* old_pc was a Baidaq *)
+      * (* Baidaq piece type case *)
         reflexivity.
-    + (* b[pos] = None *)
+    + (* Empty position case *)
       reflexivity.
-  - (* pos <> p - the board is unchanged at p *)
+  - (* Position distinction: board unchanged at p *)
     reflexivity.
 Qed.
 
-(** Legal_prevents_self_check in practice *)
+(** Self-check prevention validation example *)
 Example pinned_piece_cannot_expose_shah :
-  (* White Shah on e1, White Ferz on e2, Black Rukh on e8 *)
+  (* Position configuration: White Shah e1, White Ferz e2, Black Rukh e8 *)
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
     else if position_beq pos (mkPosition rank2 fileE) then Some white_ferz
@@ -7604,9 +7764,9 @@ Example pinned_piece_cannot_expose_shah :
     else None in
   let st := mkGameState b White 0 1 false in
   let illegal_move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileF) in
-  (* The Ferz move is illegal because it would expose Shah to check *)
+  (* Ferz movement illegality due to Shah exposure *)
   (legal_move_impl st illegal_move = false) /\
-  (* If we hypothetically forced the move, the Shah would be in check *)
+  (* Hypothetical move execution results in Shah check *)
   (let b_after := board_move b (mkPosition rank2 fileE) (mkPosition rank3 fileF) in
    in_check b_after White = true).
 Proof.
@@ -7625,7 +7785,7 @@ Qed.
 
 (** * 13.1 Core Move Application *)
 
-(** Check if a move results in a capture *)
+(** Capture move detection predicate *)
 Definition is_capture_move (st: GameState) (m: Move) : bool :=
   match m with
   | Normal _ to | Promotion _ to =>
@@ -7636,7 +7796,7 @@ Definition is_capture_move (st: GameState) (m: Move) : bool :=
   | _ => false
   end.
 
-(** Example: Rukh capturing an opponent piece *)
+(** Rukh capture validation example *)
 Example capture_detection_example :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
@@ -7647,15 +7807,15 @@ Example capture_detection_example :
   let st := mkGameState b White 0 50 false in
   let capture_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileH) in
   let non_capture_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileD) in
-  (* Rukh captures Faras on h1 *)
+  (* Rukh captures Faras at h1 *)
   (is_capture_move st capture_move = true) /\
-  (* Rukh moves to empty d1 *)
+  (* Rukh movement to unoccupied d1 *)
   (is_capture_move st non_capture_move = false).
 Proof.
   split; reflexivity.
 Qed.
 
-(** Check if a move is made by a Baidaq *)
+(** Baidaq move identification predicate *)
 Definition is_baidaq_move (st: GameState) (m: Move) : bool :=
   match m with
   | Normal from _ | Promotion from _ =>
@@ -7666,7 +7826,7 @@ Definition is_baidaq_move (st: GameState) (m: Move) : bool :=
   | _ => false
   end.
 
-(** Example: Detecting Baidaq moves *)
+(** Baidaq move detection validation *)
 Example baidaq_move_detection :
   let b := fun pos =>
     if position_beq pos (mkPosition rank2 fileE) then Some white_baidaq
@@ -7677,9 +7837,9 @@ Example baidaq_move_detection :
   let st := mkGameState b White 0 50 false in
   let baidaq_move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
   let rukh_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileB) in
-  (* Baidaq move is detected *)
+  (* Baidaq movement identification confirmed *)
   (is_baidaq_move st baidaq_move = true) /\
-  (* Rukh move is not a Baidaq move *)
+  (* Rukh movement excludes Baidaq classification *)
   (is_baidaq_move st rukh_move = false).
 Proof.
   split; reflexivity.
@@ -7687,7 +7847,7 @@ Qed.
 
 (** * 13.2 State Transition Properties *)
 
-(** Helper: apply_move_impl updates the halfmove clock correctly *)  
+(** Halfmove clock update correctness lemma *)  
 Lemma apply_move_halfmove_clock : forall st m st' from to,
   apply_move_impl st m = Some st' ->
   (m = Normal from to \/ m = Promotion from to) ->
@@ -7713,7 +7873,7 @@ Qed.
 
 (** * 13.3 Main Validation *)
 
-(** REQUIRED BY SPEC: Legal moves can be applied successfully *)
+(** Specification requirement: Legal move application guarantee *)
 Example apply_legal_succeeds_validation : forall st m,
   WellFormedState st = true ->
   legal_move_impl st m = true ->
@@ -7722,11 +7882,11 @@ Example apply_legal_succeeds_validation : forall st m,
   (m = DrawAccept).
 Proof.
   intros st m Hwf Hlegal.
-  (* This is exactly the theorem we proved in Section 12 *)
+  (* Direct application of Section 12 theorem *)
   apply apply_legal_succeeds; assumption.
 Qed.
 
-(** Example: Applying a White Baidaq opening move *)
+(** White Baidaq opening move application example *)
 Example apply_baidaq_opening :
   let st := initial_game_state in
   let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
@@ -7735,11 +7895,11 @@ Example apply_baidaq_opening :
   (* And it can be applied *)
   exists st', 
     apply_move_impl st move = Some st' /\
-    (* After the move, it's Black's turn *)
+    (* Post-move turn transition to Black *)
     turn st' = Black /\
-    (* The Baidaq is now at e3 *)
+    (* Baidaq position updated to e3 *)
     (board st')[mkPosition rank3 fileE] = Some white_baidaq /\
-    (* e2 is now empty *)
+    (* Source square e2 vacated *)
     (board st')[mkPosition rank2 fileE] = None.
 Proof.
   split.
@@ -7751,7 +7911,7 @@ Proof.
     + split; [|split; [|split]]; compute; reflexivity.
 Qed.
 
-(** Example: Baidaq promotion automatically creates Ferz *)
+(** Automatic Baidaq-to-Ferz promotion example *)
 Example apply_promotion :
   let b := fun pos =>
     if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
@@ -7760,14 +7920,14 @@ Example apply_promotion :
     else None in
   let st := mkGameState b White 0 50 false in
   let move := Promotion (mkPosition rank7 fileE) (mkPosition rank8 fileE) in
-  (* Can apply the promotion *)
+  (* Promotion application validation *)
   exists st',
     apply_move_impl st move = Some st' /\
-    (* After promotion, there's a Ferz at e8 *)
+    (* Post-promotion Ferz placement at e8 *)
     (board st')[mkPosition rank8 fileE] = Some white_ferz /\
-    (* e7 is now empty *)
+    (* Source square e7 vacated *)
     (board st')[mkPosition rank7 fileE] = None /\
-    (* It's Black's turn *)
+    (* Turn transition to Black *)
     turn st' = Black.
 Proof.
   eexists. split.
@@ -7939,7 +8099,7 @@ Definition moves_independent (m1 m2: Move) : bool :=
   | _, _ => false
   end.
 
-(** Example: Two rukhs moving on different files are independent *)
+(** Independence validation for Rukhs on distinct files *)
 Example independent_rukh_moves :
   let m1 := Normal (mkPosition rank1 fileA) (mkPosition rank5 fileA) in
   let m2 := Normal (mkPosition rank1 fileH) (mkPosition rank5 fileH) in
@@ -7948,7 +8108,7 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** Helper: Independent moves don't interfere with each other's source/destination *)
+(** Non-interference property of independent moves *)
 Lemma independent_moves_no_interference : forall from1 to1 from2 to2,
   moves_independent (Normal from1 to1) (Normal from2 to2) = true ->
   from1 <> from2 /\ to1 <> from2 /\ to2 <> from1 /\ to1 <> to2.
@@ -7966,11 +8126,10 @@ Proof.
 Qed.
 
 (**
-   FUNDAMENTAL THEOREM: Conservation of Non-Interference
+   Fundamental Theorem: Conservation of Non-Interference
    
-   If two positions don't overlap with a move's source and destination,
-   then the move doesn't affect those positions. This is the foundation
-   for proving move independence and confluence.
+   Position preservation for non-overlapping move coordinates establishes
+   the foundational principle for move independence and confluence properties.
 *)
 Theorem move_locality : forall st from to st' pos,
   apply_move_impl st (Normal from to) = Some st' ->
@@ -8005,7 +8164,7 @@ Qed.
 
 (** * 13.6 Draw Offer Persistence Properties *)
 
-(** THEOREM: DrawOffer sets the draw_offer_pending flag *)
+(** Draw offer flag activation theorem *)
 Theorem draw_offer_sets_flag : forall st st',
   apply_move_impl st DrawOffer = Some st' ->
   draw_offer_pending st' = true.
@@ -8016,7 +8175,7 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** Example: White offers a draw in a balanced endgame position *)
+(** Draw offer in balanced endgame scenario *)
 Example white_offers_draw_endgame :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -8024,16 +8183,16 @@ Example white_offers_draw_endgame :
     else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
     else if position_beq pos (mkPosition rank8 fileH) then Some black_rukh
     else None in
-  let st := mkGameState b White 45 80 false in  (* Late endgame, no draw offer pending *)
+  let st := mkGameState b White 45 80 false in  (* Late endgame configuration without pending draw *)
   exists st',
     apply_move_impl st DrawOffer = Some st' /\
-    (* Draw offer is now pending *)
+    (* Draw offer state activated *)
     draw_offer_pending st' = true /\
-    (* Board unchanged *)
+    (* Board configuration preserved *)
     board st' = board st /\
-    (* Turn unchanged - still White's turn until Black responds *)
+    (* Turn persistence pending Black response *)
     turn st' = White /\
-    (* Move counters unchanged *)
+    (* Move counter preservation *)
     halfmove_clock st' = 45 /\
     fullmove_number st' = 80.
 Proof.
@@ -8042,7 +8201,7 @@ Proof.
   - split; [|split; [|split; [|split; [|split]]]]; simpl; reflexivity.
 Qed.
 
-(** THEOREM: Normal moves clear the draw_offer_pending flag *)
+(** Normal move draw offer cancellation theorem *)
 Theorem normal_move_clears_draw_offer : forall st from to st',
   apply_move_impl st (Normal from to) = Some st' ->
   draw_offer_pending st' = false.
@@ -8054,7 +8213,7 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** Example: Black declines draw offer by making a move *)
+(** Draw offer declination through move execution *)
 Example black_declines_draw_by_moving :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -8062,17 +8221,17 @@ Example black_declines_draw_by_moving :
     else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
     else if position_beq pos (mkPosition rank8 fileH) then Some black_rukh
     else None in
-  let st := mkGameState b Black 45 80 true in  (* Black's turn, draw offer pending from White *)
+  let st := mkGameState b Black 45 80 true in  (* Black turn with pending White draw offer *)
   let move := Normal (mkPosition rank8 fileH) (mkPosition rank8 fileG) in
   exists st',
     apply_move_impl st move = Some st' /\
-    (* Draw offer is now cleared - Black declined by playing *)
+    (* Draw offer cleared through move execution *)
     draw_offer_pending st' = false /\
-    (* Turn switches to White *)
+    (* Turn transition to White *)
     turn st' = White /\
-    (* Rukh moved to g8 *)
+    (* Rukh relocated to g8 *)
     (board st')[mkPosition rank8 fileG] = Some black_rukh /\
-    (* h8 is now empty *)
+    (* Source square h8 vacated *)
     (board st')[mkPosition rank8 fileH] = None.
 Proof.
   eexists. split.
@@ -8080,7 +8239,7 @@ Proof.
   - split; [|split; [|split; [|split]]]; simpl; reflexivity.
 Qed.
 
-(** THEOREM: Promotion moves also clear the draw_offer_pending flag *)
+(** Promotion move draw offer cancellation theorem *)
 Theorem promotion_clears_draw_offer : forall st from to st',
   apply_move_impl st (Promotion from to) = Some st' ->
   draw_offer_pending st' = false.
@@ -8092,7 +8251,7 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** Example: Complete draw offer lifecycle in an endgame *)
+(** Comprehensive draw offer lifecycle demonstration in endgame *)
 Example draw_offer_complete_lifecycle :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -8339,21 +8498,21 @@ Definition generate_all_pseudo_legal_moves (st: GameState) : list Move :=
 Definition generate_moves_impl (st: GameState) : list Move :=
   filter (fun m => legal_move_impl st m) (generate_pseudo_legal_moves st).
 
-(** Complete move generation including non-board moves *)
+(** Comprehensive move generation incorporating non-board moves *)
 Definition generate_all_moves (st: GameState) : list Move :=
   filter (fun m => legal_move_impl st m) (generate_all_pseudo_legal_moves st).
 
-(** Example: Initial position has legal moves *)
+(** Initial position legal move availability validation *)
 Example initial_position_has_moves :
   let moves := generate_moves_impl initial_game_state in
-  List.length moves = 16.  (* 8 Baidaq moves + 8 piece moves *)
+  List.length moves = 16.  (* 8 Baidaq advances + 8 piece movements *)
 Proof.
   compute. reflexivity.
 Qed.
 
-(** * 14.4 Completeness Validation - Required by Spec *)
+(** * 14.4 Specification-Required Completeness Validation *)
 
-(** Helper: Baidaq moves are either Normal (not promotion) or Promotion (at promotion) *)
+(** Baidaq move classification: Normal or Promotion based on rank *)
 Lemma baidaq_move_generation_cases : forall b c from to,
   baidaq_move_impl b c from to = true ->
   In (if baidaq_at_promotion_rank to c then Promotion from to else Normal from to)
@@ -8374,7 +8533,7 @@ Proof.
     + left. reflexivity.
 Qed.
 
-(** Helper: Normal moves are in the pseudo-legal list when not a mandatory promotion *)
+(** Normal move inclusion in pseudo-legal generation excluding mandatory promotion *)
 Lemma normal_move_in_pseudo_legal : forall st from to,
   legal_move_impl st (Normal from to) = true ->
   (forall pc, (board st)[from] = Some pc -> 
@@ -8466,7 +8625,7 @@ Proof.
     + discriminate.
 Qed.
 
-(** Example: Baidaq at promotion rank only generates Promotion move, not Normal *)
+(** Exclusive Promotion move generation for Baidaq at terminal rank *)
 Example baidaq_promotion_exclusive :
   let b := fun pos =>
     if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
@@ -8482,7 +8641,7 @@ Proof.
   - intro H. simpl in H. destruct H as [H|H]; [discriminate | exact H].
 Qed.
 
-(** Helper: Promotion moves are in the pseudo-legal list when required *)
+(** Mandatory Promotion move inclusion in pseudo-legal generation *)
 Lemma promotion_move_in_pseudo_legal : forall st from to,
   legal_move_impl st (Promotion from to) = true ->
   (exists pc, (board st)[from] = Some pc /\ 
@@ -8524,7 +8683,7 @@ Proof.
       left. reflexivity.
 Qed.
 
-(** Helper: Non-board moves are always in the complete pseudo-legal list *)
+(** Universal inclusion of non-board moves in pseudo-legal generation *)
 Lemma non_board_moves_in_all_pseudo_legal : forall st,
   In (Resignation (turn st)) (generate_all_pseudo_legal_moves st) /\
   In DrawOffer (generate_all_pseudo_legal_moves st) /\
@@ -8546,7 +8705,7 @@ Proof.
     left. reflexivity.
 Qed.
 
-(** REQUIRED BY SPEC: All legal Normal moves are in generated list *)
+(** Specification requirement: Complete Normal move generation coverage *)
 Example gen_captures_all_legal_normal: forall st from to,
   WellFormedState st = true ->
   legal_move_impl st (Normal from to) = true ->
@@ -8563,7 +8722,7 @@ Proof.
   - exact Hlegal.
 Qed.
 
-(** Concrete example: Initial position generates expected baidaq moves *)
+(** Initial position Baidaq movement generation validation *)
 Example initial_baidaq_e2e3_generated :
   let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
   In move (generate_moves_impl initial_game_state).
@@ -8583,7 +8742,7 @@ Proof.
   - compute. reflexivity.
 Qed.
 
-(** Example: All legal Promotion moves are in generated list *)
+(** Complete Promotion move generation coverage validation *)
 Example gen_captures_all_legal_promotion : forall st from to,
   WellFormedState st = true ->
   legal_move_impl st (Promotion from to) = true ->
@@ -8600,7 +8759,7 @@ Proof.
   - exact Hlegal.
 Qed.
 
-(** Concrete example: White baidaq promotion to Ferz is properly generated *)
+(** White Baidaq-to-Ferz promotion generation validation *)
 Example white_baidaq_promotion_generated :
   let b := fun pos =>
     if position_beq pos (mkPosition rank7 fileE) then Some white_baidaq
@@ -8626,9 +8785,9 @@ Proof.
   - compute. reflexivity.
 Qed.
 
-(** * 14.5 Non-trivial Invariants for Move Generation *)
+(** * 14.5 Move Generation Invariants *)
 
-(** INVARIANT 1: Every piece at a position generates moves only from that position *)
+(** Invariant: Piece movement generation originates exclusively from piece position *)
 Lemma piece_moves_from_position : forall b pc from,
   forall m, In m (generate_piece_moves b pc from) ->
   exists to, m = Normal from to \/ m = Promotion from to.
@@ -8667,7 +8826,7 @@ Proof.
       exists to. left. symmetry. exact Heq.
 Qed.
 
-(** INVARIANT 2: Pseudo-legal moves only come from pieces of the current player *)
+(** Invariant: Pseudo-legal generation restricted to active player pieces *)
 Lemma pseudo_legal_correct_color : forall st m,
   In m (generate_pseudo_legal_moves st) ->
   match m with
@@ -8690,7 +8849,7 @@ Proof.
   - exists pc. split; assumption.
 Qed.
 
-(** INVARIANT 3: Promotion moves are generated iff baidaq reaches promotion rank *)
+(** Invariant: Promotion generation equivalence with Baidaq terminal rank achievement *)
 Lemma promotion_generation_invariant : forall b c from to,
   In (Promotion from to) (generate_baidaq_moves b c from) <->
   (baidaq_move_impl b c from to = true /\ baidaq_at_promotion_rank to c = true).
@@ -8724,9 +8883,9 @@ Proof.
       left. reflexivity.
 Qed.
 
-(** * 14.6 Unified Completeness Validation *)
+(** * 14.6 Comprehensive Completeness Validation *)
 
-(** Helper: Identify which moves should be in generate_moves_impl *)
+(** Board move classification predicate for generation validation *)
 Definition is_board_move (m: Move) : bool :=
   match m with
   | Normal _ _ => true
@@ -8734,7 +8893,7 @@ Definition is_board_move (m: Move) : bool :=
   | _ => false
   end.
 
-(** Lemma: is_board_move characterizes Normal and Promotion moves *)
+(** Board move characterization for Normal and Promotion types *)
 Lemma is_board_move_correct : forall m,
   is_board_move m = true <->
   (exists from to, m = Normal from to) \/ (exists from to, m = Promotion from to).
@@ -8748,7 +8907,7 @@ Proof.
   - intros [[from [to Heq]]|[from [to Heq]]]; subst; reflexivity.
 Qed.
 
-(** Lemma: Non-board moves are never in generate_moves_impl *)
+(** Non-board move exclusion from board move generation *)
 Lemma non_board_moves_not_in_moves_impl : forall st m,
   is_board_move m = false ->
   ~In m (generate_moves_impl st).
@@ -8768,7 +8927,7 @@ Proof.
   destruct Hgen as [to [Heq|Heq]]; subst m; simpl in Hnotboard; discriminate.
 Qed.
 
-(** REQUIRED BY SPEC: Unified completeness theorem for all legal moves *)
+(** Specification requirement: Comprehensive legal move generation completeness *)
 Example gen_captures_all_legal: forall st m,
   WellFormedState st = true ->
   legal_move_impl st m = true ->
@@ -8795,23 +8954,23 @@ Proof.
   - trivial.
 Qed.
 
-(** Example: Unified theorem handles different move types correctly *)
+(** Unified theorem move type differentiation validation *)
 Example unified_theorem_handles_all_cases : 
-  (* The unified theorem correctly dispatches on move type *)
+  (* Move type dispatch validation *)
   forall st m,
   WellFormedState st = true ->
   legal_move_impl st m = true ->
-  (* For Normal moves, need to verify it's not a mandatory promotion *)
+  (* Normal move verification excludes mandatory promotion *)
   (forall from to, m = Normal from to ->
     forall pc, (board st)[from] = Some pc ->
       piece_type pc = Baidaq ->
       baidaq_at_promotion_rank to (piece_color pc) = false) ->
-  (* For Promotion moves, need to verify promotion is mandatory *)
+  (* Promotion move verification confirms mandatory status *)
   (forall from to, m = Promotion from to ->
     exists pc, (board st)[from] = Some pc /\
       piece_type pc = Baidaq /\
       baidaq_at_promotion_rank to (piece_color pc) = true) ->
-  (* Then the move is in the generated list (for board moves) *)
+  (* Board move inclusion in generation confirmed *)
   is_board_move m = true ->
   In m (generate_moves_impl st).
 Proof.
@@ -8830,38 +8989,38 @@ Proof.
     apply (Hpromo from to eq_refl).
 Qed.
 
-(** * 14.7 Validation: All Generated Moves are Legal *)
+(** * 14.7 Generated Move Legality Validation *)
 
-(** Helper: General property of filter *)
+(** Filter predicate preservation property *)
 Lemma filter_preserves_predicate : forall (A : Type) (f : A -> bool) (l : list A) (x : A),
   In x (filter f l) -> f x = true.
 Proof.
   intros A f l.
   induction l as [|h t IH].
-  - (* Empty list *)
+  - (* Base case: empty list *)
     intros x Hx.
     simpl in Hx.
     apply False_ind.
     exact Hx.
-  - (* Cons *)
+  - (* Inductive case: cons *)
     intros x Hx.
     simpl in Hx.
     destruct (f h) eqn:Hfh.
-    + (* h passes filter *)
+    + (* Element passes filter predicate *)
       simpl in Hx.
       destruct Hx as [Heq | Ht].
-      * (* x = h *)
+      * (* Element equality case *)
         subst x.
         exact Hfh.
-      * (* x in tail *)
+      * (* Element in tail case *)
         apply IH.
         exact Ht.
-    + (* h doesn't pass filter *)
+    + (* Element fails filter predicate *)
       apply IH.
       exact Hx.
 Qed.
 
-(** Theorem: Every move generated is legal - abstract version *)  
+(** Generated move legality theorem *)  
 Theorem all_generated_moves_legal : forall st m,
   In m (generate_moves_impl st) -> 
   legal_move_impl st m = true.
@@ -8876,7 +9035,7 @@ Proof.
            Hin).
 Qed.
 
-(** Specialization: Every move generated from initial position is legal *)
+(** Initial position move generation legality specialization *)
 Theorem all_initial_moves_legal :
   forall m, In m (generate_moves_impl initial_game_state) -> 
             legal_move_impl initial_game_state m = true.
@@ -8884,21 +9043,21 @@ Proof.
   apply all_generated_moves_legal.
 Qed.
 
-(** Example: Specific move legality check without full generation *)
+(** Direct move legality verification example *)
 Example baidaq_e2e3_legal_directly :
   legal_move_impl initial_game_state 
     (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE)) = true.
 Proof.
-  (* Direct computation of this specific move's legality *)
+  (* Direct legality computation *)
   reflexivity.
 Qed.
 
-(** Corollary: The theorem guarantees this for all generated moves *)
+(** Generated move legality guarantee corollary *)
 Corollary generated_implies_legal : forall m,
   In m (generate_moves_impl initial_game_state) ->
   legal_move_impl initial_game_state m = true.
 Proof.
-  (* This is exactly our theorem *)
+  (* Direct application of generation legality theorem *)
   exact all_initial_moves_legal.
 Qed.
 
@@ -8908,10 +9067,9 @@ Qed.
 (* SECTION 15: GAME TREE PROPERTIES                                         *)
 (* ========================================================================= *)
 
-(** * 15.1 Reachability Definition *)
+(** * 15.1 State Reachability Definition *)
 
-(** A state st' is reachable from st if there exists a sequence of legal moves
-    transforming st into st' *)
+(** State reachability through legal move sequence transformation *)
 Inductive reachable : GameState -> GameState -> Prop :=
   | reachable_refl : forall st, reachable st st
   | reachable_step : forall st st' st'' m,
@@ -8920,7 +9078,7 @@ Inductive reachable : GameState -> GameState -> Prop :=
       reachable st' st'' ->
       reachable st st''.
 
-(** Helper: One move creates reachability *)
+(** Single move reachability establishment *)
 Lemma reachable_one_move : forall st st' m,
   legal_move_impl st m = true ->
   apply_move_impl st m = Some st' ->
@@ -8931,9 +9089,9 @@ Proof.
   apply reachable_refl.
 Qed.
 
-(** * 15.2 Reachability Properties *)
+(** * 15.2 Reachability Transitivity Properties *)
 
-(** Transitivity of reachability *)
+(** Reachability transitivity theorem *)
 Lemma reachable_trans : forall st st' st'',
   reachable st st' ->
   reachable st' st'' ->
@@ -8941,15 +9099,15 @@ Lemma reachable_trans : forall st st' st'',
 Proof.
   intros st st' st'' H1 H2.
   induction H1 as [st | st stmid stend m Hlegal Happly Hreach IH].
-  - (* refl case: st = st' *)
+  - (* Reflexivity case *)
     exact H2.
-  - (* step case: st -> stmid -> stend, and we need st -> st'' *)
+  - (* Inductive step: transitivity through intermediate state *)
     apply (@reachable_step st stmid st'' m Hlegal Happly).
     apply IH.
     exact H2.
 Qed.
 
-(** * 15.3 Well-Formedness Preservation *)
+(** * 15.3 State Well-Formedness Preservation *)
 
 Lemma board_move_preserves_shah_at_other_positions : forall b from to pos pc,
   b[pos] = Some pc ->
@@ -9008,7 +9166,7 @@ Proof.
   - discriminate.
 Qed.
 
-(** Helper: Check if a position contains a Shah of given color *)
+(** Shah presence verification at position for specified color *)
 Definition has_shah_of_color (b: Board) (pos: Position) (c: Color) : bool :=
   match b[pos] with
   | Some pc => andb (Color_beq (piece_color pc) c)
@@ -9016,7 +9174,7 @@ Definition has_shah_of_color (b: Board) (pos: Position) (c: Color) : bool :=
   | None => false
   end.
 
-(** Helper: board_move at position other than from/to is unchanged *)
+(** Board persistence at positions distinct from source and destination *)
 Lemma board_move_other_unchanged : forall b from to pos,
   pos <> from ->
   pos <> to ->
@@ -9034,7 +9192,7 @@ Proof.
   - reflexivity.
 Qed.
 
-(** Helper: board_move places the moving piece at destination *)
+(** Piece placement at destination through board_move operation *)
 Lemma board_move_at_destination : forall b from to pc,
   from <> to ->
   b[from] = Some pc ->
@@ -9049,7 +9207,7 @@ Proof.
   - contradiction.
 Qed.
 
-(** Helper: board_move clears the source position *)
+(** Source position evacuation through board_move operation *)
 Lemma board_move_at_source : forall b from to pc,
   from <> to ->
   b[from] = Some pc ->
@@ -9066,7 +9224,7 @@ Proof.
     + contradiction.
 Qed.
 
-(** Helper: Moving non-Shah doesn't affect Shah count *)
+(** Shah count invariance under non-Shah piece movement *)
 Lemma board_move_non_shah_preserves_count : forall b from to c pc,
   b[from] = Some pc ->
   piece_type pc <> Shah ->
@@ -9121,7 +9279,7 @@ Proof.
       reflexivity.
 Qed.
 
-(** Example: Moving a Ferz doesn't change Shah count *)
+(** Ferz movement Shah count preservation example *)
 Example ferz_move_preserves_shah_count :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -9139,7 +9297,7 @@ Qed.
 
 
 (** REQUIRED BY SPEC: Reachability preserves well-formedness *)
-(** Concrete example: Initial position remains wellformed after one move *)
+(** Initial position well-formedness preservation after single move *)
 Example reachable_preserves_wf_concrete :
   let st0 := initial_game_state in
   let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
@@ -9159,7 +9317,7 @@ Proof.
     reflexivity.
 Qed.
 
-(** Initial state is well-formed *)
+(** Initial game state well-formedness validation *)
 Example initial_state_wellformed : 
   WellFormedState initial_game_state = true.
 Proof.
@@ -9167,9 +9325,9 @@ Proof.
 Qed.
 
 
-(** * 15.4 Well-Formedness Preservation *)
+(** * 15.4 Movement Well-Formedness Preservation *)
 
-(** Helper: occupied_by check prevents capturing same color *)
+(** Same-color capture prevention through occupied_by validation *)
 Lemma occupied_by_prevents_same_color : forall b pos c pc,
   negb (occupied_by b pos c) = true ->
   b[pos] = Some pc ->
@@ -9183,11 +9341,11 @@ Proof.
   apply Color_beq_neq. exact Hocc.
 Qed.
 
-(** Helper: Pieces are opposite colors *)
+(** Opposite color determination for piece pairs *)
 Definition pieces_opposite_colors (pc1 pc2: Piece) : bool :=
   negb (Color_beq (piece_color pc1) (piece_color pc2)).
 
-(** Helper: Opposite colors are not equal *)
+(** Opposite color inequality lemma *)
 Lemma opposite_colors_neq : forall pc1 pc2,
   pieces_opposite_colors pc1 pc2 = true ->
   piece_color pc1 <> piece_color pc2.
@@ -9198,7 +9356,7 @@ Proof.
   apply Color_beq_neq. exact H.
 Qed.
 
-(** Helper: shah_move_impl checks target is not friendly *)
+(** Shah movement friendly target exclusion validation *)
 Lemma shah_move_checks_not_friendly : forall b c from to,
   shah_move_impl b c from to = true ->
   negb (occupied_by b to c) = true.
@@ -9210,7 +9368,7 @@ Proof.
   exact Hocc.
 Qed.
 
-(** Helper: ferz_move_impl checks target is not friendly *)
+(** Ferz movement friendly target exclusion validation *)
 Lemma ferz_move_checks_not_friendly : forall b c from to,
   ferz_move_impl b c from to = true ->
   negb (occupied_by b to c) = true.
@@ -9221,7 +9379,7 @@ Proof.
   exact Hocc.
 Qed.
 
-(** Helper: alfil_move_impl checks target is not friendly *)
+(** Alfil movement friendly target exclusion validation *)
 Lemma alfil_move_checks_not_friendly : forall b c from to,
   alfil_move_impl b c from to = true ->
   negb (occupied_by b to c) = true.
@@ -9232,7 +9390,7 @@ Proof.
   exact Hocc.
 Qed.
 
-(** Helper: faras_move_impl checks target is not friendly *)
+(** Faras movement friendly target exclusion validation *)
 Lemma faras_move_checks_not_friendly : forall b c from to,
   faras_move_impl b c from to = true ->
   negb (occupied_by b to c) = true.
@@ -9243,7 +9401,7 @@ Proof.
   exact Hocc.
 Qed.
 
-(** Helper: rukh_move_impl checks target is not friendly *)
+(** Rukh movement friendly target exclusion validation *)
 Lemma rukh_move_checks_not_friendly : forall b c from to,
   rukh_move_impl b c from to = true ->
   negb (occupied_by b to c) = true.
@@ -9256,7 +9414,7 @@ Proof.
   exact Hmatch.
 Qed.
 
-(** Helper: Legal moves only capture opposite color *)
+(** Legal capture opposite color constraint *)
 Lemma legal_capture_opposite_color : forall st from to target,
   legal_move_impl st (Normal from to) = true ->
   (board st)[to] = Some target ->
@@ -9316,7 +9474,7 @@ Proof.
   exact Heq.
 Qed.
 
-(** Example: When a Rukh captures legally, it's always opposite color *)
+(** Rukh legal capture opposite color validation *)
 Example rukh_legal_capture_opposite :
   let b := fun pos =>
     if position_beq pos (mkPosition rank4 fileD) then Some white_rukh
@@ -9326,7 +9484,7 @@ Example rukh_legal_capture_opposite :
     else None in
   let st := mkGameState b White 0 1 false in
   let capture_move := Normal (mkPosition rank4 fileD) (mkPosition rank4 fileH) in
-  (* This configuration allows the capture *)
+  (* Capture configuration validation *)
   legal_move_impl st capture_move = true /\
   piece_color white_rukh <> piece_color black_faras.
 Proof.
@@ -9335,9 +9493,9 @@ Proof.
   - intro H. discriminate.
 Qed.
 
-(** * 15.5 Well-Formedness Preservation Through Moves *)
+(** * 15.5 Move-Based Well-Formedness Preservation *)
 
-(** Helper: Apply move preserves well-formedness for board moves *)
+(** Board move well-formedness preservation lemma *)
 Lemma initial_moves_preserve_wellformed : 
   let st := initial_game_state in
   let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
@@ -9352,7 +9510,7 @@ Proof.
   reflexivity.
 Qed.
 
-(** Example: Baidaq e2-e3 preserves both Shah counts *)
+(** Baidaq advance Shah count preservation example *)
 Example baidaq_move_preserves_shah_counts :
   let st := initial_game_state in
   let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
@@ -9372,9 +9530,9 @@ Proof.
   - compute. reflexivity.
 Qed.
 
-(** * 15.5 Helper Lemmas for Well-Formedness *)
+(** * 15.5 Well-Formedness Helper Lemmas *)
 
-(** Helper: Legal moves using safe implementation never capture Shah *)
+(** Shah capture prohibition in safe legal move implementation *)
 Lemma legal_move_no_shah_capture : forall st from to,
   legal_move_impl_safe st (Normal from to) = true ->
   forall pc, (board st)[to] = Some pc ->
@@ -9392,7 +9550,7 @@ Proof.
   discriminate.
 Qed.
 
-(** Example: Rukh cannot legally capture Shah even if physically possible *)
+(** Rukh Shah capture prohibition validation *)
 Example rukh_cannot_capture_shah_legally :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
@@ -9401,13 +9559,13 @@ Example rukh_cannot_capture_shah_legally :
     else None in
   let st := mkGameState b White 0 1 false in
   let capture_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileH) in
-  (* The move would be rejected by legal_move_impl_safe *)
+  (* Safe implementation rejection validation *)
   legal_move_impl_safe st capture_move = false.
 Proof.
   compute. reflexivity.
 Qed.
 
-(** Helper: DrawOffer doesn't change Shah count *)
+(** Draw offer Shah count invariance *)
 Lemma draw_offer_preserves_shah_count : forall st st' c,
   apply_move_impl st DrawOffer = Some st' ->
   shah_count (board st') c = shah_count (board st) c.
@@ -9418,21 +9576,21 @@ Proof.
   simpl. reflexivity.
 Qed.
 
-(** Helper: Initial position is well-formed *)
+(** Initial position well-formedness property *)
 Lemma initial_position_wellformed :
   WellFormedState initial_game_state = true.
 Proof.
   compute. reflexivity.
 Qed.
 
-(** Helper: PieceType equality decidable *)
+(** PieceType equality decidability *)
 Lemma PieceType_eq_dec : forall (pt1 pt2: PieceType),
   {pt1 = pt2} + {pt1 <> pt2}.
 Proof.
   decide equality.
 Qed.
 
-(** Helper: Piece equality decidable *)
+(** Piece equality decidability *)
 Lemma Piece_eq_dec : forall (p1 p2: Piece),
   {p1 = p2} + {p1 <> p2}.
 Proof.
@@ -9441,7 +9599,7 @@ Proof.
   - apply Color_eq_dec.
 Qed.
 
-(** Helper: Option equality decidable *)
+(** Option type equality decidability *)
 Lemma option_eq_dec : forall A (A_eq_dec: forall x y: A, {x = y} + {x <> y}) 
   (o1 o2: option A),
   {o1 = o2} + {o1 <> o2}.
@@ -9457,7 +9615,7 @@ Proof.
 Qed.
 
 
-(** Helper: Specific e2-e3 move preserves well-formedness *)
+(** E2-E3 move well-formedness preservation *)
 Lemma e2e3_preserves_wellformed :
   forall st',
   apply_move_impl initial_game_state 
@@ -9470,9 +9628,9 @@ Proof.
   compute. reflexivity.
 Qed.
 
-(** * 15.6 Main Well-Formedness Preservation Theorem *)
+(** * 15.6 Principal Well-Formedness Preservation Theorem *)
 
-(** Helper: Normal moves (non-promotion, non-Shah) preserve Shah count *)
+(** Shah count preservation under normal non-Shah movement *)
 Lemma normal_move_preserves_shah_count : forall b from to c,
   from <> to ->
   (forall pc, b[from] = Some pc -> piece_type pc <> Shah) ->
@@ -9481,17 +9639,17 @@ Lemma normal_move_preserves_shah_count : forall b from to c,
 Proof.
   intros b from to c Hneq Hfrom_not_shah Hto_not_shah.
   destruct (b[from]) as [pc|] eqn:Hfrom.
-  - (* from has a piece *)
+  - (* Source position occupied *)
     apply board_move_non_shah_preserves_count with pc.
     + exact Hfrom.
     + apply Hfrom_not_shah. reflexivity.
     + exact Hto_not_shah.
-  - (* from is empty - board_move does nothing *)
+  - (* Source position empty: board_move identity *)
     unfold board_move. rewrite Hfrom.
     reflexivity.
 Qed.
 
-(** Example: Moving a Rukh doesn't change Shah count *)
+(** Rukh movement Shah count invariance example *)
 Example rukh_move_preserves_shah_count_example :
   let b := fun pos =>
     if position_beq pos (mkPosition rank1 fileE) then Some white_shah
@@ -9507,7 +9665,7 @@ Proof.
   simpl. split; [|split; [|split]]; reflexivity.
 Qed.
 
-(** Helper: Placing a Ferz where no Shah exists preserves Shah count *)
+(** Ferz placement Shah count preservation at non-Shah position *)
 Lemma promotion_preserves_shah_count : forall b pos pc c,
   piece_type pc = Ferz ->
   (forall old_pc, b[pos] = Some old_pc -> piece_type old_pc <> Shah) ->
@@ -9519,14 +9677,14 @@ Proof.
   apply filter_ext.
   intros p.
   destruct (position_eq_dec pos p).
-  - (* At the promotion position *)
+  - (* Promotion position case *)
     subst p.
     unfold board_place. simpl.
     destruct (position_eq_dec pos pos); [|contradiction].
     unfold is_shah.
     rewrite Hferz. simpl.
     destruct (b[pos]) as [old_pc|] eqn:Hbpos.
-    + (* There was a piece at pos - not a Shah by hypothesis *)
+    + (* Occupied position: non-Shah by hypothesis *)
       assert (piece_type old_pc <> Shah) by (apply Hno_shah; reflexivity).
       destruct (Color_beq (piece_color old_pc) c') eqn:Hcolor;
       destruct (PieceType_beq (piece_type old_pc) Shah) eqn:Hshah.
@@ -9534,12 +9692,13 @@ Proof.
       * destruct (Color_beq (piece_color pc) c'); reflexivity.
       * apply PieceType_beq_eq in Hshah. contradiction.
       * destruct (Color_beq (piece_color pc) c'); reflexivity.
-    + (* Empty position *)
+    + (* Empty position case *)
       destruct (Color_beq (piece_color pc) c'); simpl; reflexivity.
-  - (* Other positions unchanged *)
+  - (* Non-promotion positions unchanged *)
     unfold board_place. simpl.
     destruct (position_eq_dec pos p); [contradiction|].
     reflexivity.
 Qed.
 
 (** * End of Section 15: Game Tree Properties *)
+      
