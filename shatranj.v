@@ -10207,4 +10207,69 @@ Proof.
   - reflexivity.
 Qed.
 
+(** * 15.17 Finite Game Properties - Specification Completion *)
+
+(** Helper: Game terminates when halfmove clock reaches limit *)
+Lemma game_terminates_at_halfmove_limit : forall st,
+  halfmove_clock st >= max_halfmove_clock ->
+  is_terminated st = true \/ determine_outcome st = Draw SeventyMoveRule.
+Proof.
+  intros st Hclock.
+  unfold is_terminated, determine_outcome.
+  destruct (andb (in_check (board st) (turn st))
+                 (negb (existsb (fun m : Move => legal_move_impl st m) 
+                        (generate_moves_impl st)))).
+  - left. destruct (turn st); reflexivity.
+  - destruct (andb (negb (in_check (board st) (turn st)))
+                   (negb (existsb (fun m : Move => legal_move_impl st m) 
+                          (generate_moves_impl st)))).
+    + left. destruct (turn st); reflexivity.
+    + destruct (bare_king_check st) eqn:Hbare.
+      * destruct (can_counter_bare st).
+        -- left. reflexivity.
+        -- left. destruct c; reflexivity.
+      * unfold max_halfmove_clock in Hclock.
+        destruct (Nat.leb 140 (halfmove_clock st)) eqn:Hleb.
+        -- right. reflexivity.
+        -- apply Nat.leb_nle in Hleb.
+           contradiction.
+Qed.
+
+(** Example: Game at exactly 140 halfmoves triggers seventy-move rule *)
+Example seventy_move_rule_triggers_at_limit :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else if position_beq pos (mkPosition rank8 fileH) then Some black_rukh
+    else None in
+  let st := mkGameState b White 140 70 false in
+  is_terminated st = true /\
+  determine_outcome st = Draw SeventyMoveRule.
+Proof.
+  simpl.
+  split; reflexivity.
+Qed.
+
+(** Helper: Every game path has some finite bound *)
+Lemma path_has_finite_bound : forall st path,
+  game_path st path ->
+  exists n, path_length path <= n.
+Proof.
+  intros st path Hpath.
+  exists (path_length path).
+  apply Nat.le_refl.
+Qed.
+
+(** Example: Two-move game path has finite length *)
+Example two_move_path_finite :
+  let path := [Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE);
+               Normal (mkPosition rank7 fileE) (mkPosition rank6 fileE)] in
+  exists n, path_length path <= n /\ n = 2.
+Proof.
+  exists 2.
+  simpl.
+  split; reflexivity.
+Qed.
+
 (** * End of Section 15: Game Tree Properties *)
