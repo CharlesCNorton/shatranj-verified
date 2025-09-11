@@ -263,11 +263,11 @@ VALIDATION: Example stalemate_wins: forall st,
 
 SECTION 17: HISTORICAL RULES
 
-50-MOVE RULE:
-- 50 moves without capture or Baidaq move
+70-MOVE RULE:
+- 70 moves without capture or Baidaq move
 - Either player may claim draw
-- fifty_move_counter: GameState -> nat
-- claim_fifty_move: GameState -> option GameResult
+- seventy_move_counter: GameState -> nat
+- claim_seventy_move: GameState -> option GameResult
 
 THREEFOLD REPETITION:
 - Same position 3 times
@@ -353,7 +353,7 @@ VALIDATION: Example material_bounds: forall b c,
   0 <= material_value b c <= 31. (* 2R + 2N + 2A + 1F + 8P *)
 
 SECTION 21: METATHEOREMS
-- Game termination: finite due to repetition/50-move
+- Game termination: finite due to repetition/70-move
 - Stalemate as victory preserves game termination
 - Bare king with counter-bare produces well-defined outcome
 - All pieces reachable from initial position
@@ -364,7 +364,7 @@ SECTION 21: METATHEOREMS
 - Theorem: move_generation_complete
 VALIDATION: Example finite_game_length: forall st,
   WellFormedState st = true ->
-  exists n, n <= 5000 /\ (* 50-move rule ensures termination *)
+  exists n, n <= 5000 /\ (* 70-move rule ensures termination *)
   forall path, game_path st path -> length path <= n.
 
 IMPLEMENTATION REQUIREMENTS:
