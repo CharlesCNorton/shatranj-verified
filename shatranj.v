@@ -10442,4 +10442,52 @@ Definition game_termination_measure (st: GameState) : nat :=
   (max_halfmove_clock - halfmove_clock st) + 
   (max_halfmove_clock * total_piece_count (board st)).
 
+(** Helper: length of filter is bounded by original list length *)
+Lemma length_filter_le : forall (A: Type) (P: A -> bool) (l: list A),
+  List.length (List.filter P l) <= List.length l.
+Proof.
+  intros A P l. induction l as [|a l IH]; simpl.
+  - apply Nat.le_0_l.
+  - destruct (P a) eqn:HP.
+    + apply le_n_S. exact IH.
+    + apply Nat.le_trans with (m := List.length l).
+      * exact IH.
+      * apply le_S, le_n.
+Qed.
+
+(** Example: total number of pieces on the empty board is bounded *)
+Example total_piece_count_empty_board_bounded :
+  total_piece_count empty_board <= List.length enum_position.
+Proof.
+  unfold total_piece_count.
+  apply length_filter_le.
+Qed.
+
+(** Board has 64 squares *)
+Lemma enum_position_length_64 : List.length enum_position = 64.
+Proof.
+  compute. reflexivity.
+Qed.
+
+Example enum_position_has_64_squares : List.length enum_position = 64.
+Proof.
+  exact enum_position_length_64.
+Qed.
+
+(** Any board has at most 64 occupied squares *)
+Lemma total_piece_count_le_64 : forall b, total_piece_count b <= 64.
+Proof.
+  intro b. unfold total_piece_count.
+  apply Nat.le_trans with (m := List.length enum_position).
+  - apply length_filter_le.
+  - rewrite enum_position_length_64. apply le_n.
+Qed.
+
+Definition full_board : Board := fun _ => Some white_rukh.
+
+Example full_board_has_64_pieces : total_piece_count full_board = 64.
+Proof.
+  compute. reflexivity.
+Qed.
+
 (** * End of Section 15: Game Tree Properties *)
