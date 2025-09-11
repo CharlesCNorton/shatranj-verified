@@ -10357,4 +10357,89 @@ Proof.
   intros. apply Nat.le_refl.
 Qed.
 
+(** * 15.19 Building Finite Game Invariants *)
+
+Lemma halfmove_clock_progresses : forall st m st',
+  apply_move_impl st m = Some st' ->
+  match m with
+  | Normal from to =>
+      (is_capture_move st m = true \/ is_baidaq_move st m = true) /\ halfmove_clock st' = 0 \/
+      (is_capture_move st m = false /\ is_baidaq_move st m = false) /\ halfmove_clock st' = S (halfmove_clock st)
+  | Promotion from to =>
+      is_baidaq_move st (Promotion from to) = true /\ halfmove_clock st' = 0 \/
+      is_baidaq_move st (Promotion from to) = false /\ 
+        (is_capture_move st (Promotion from to) = true /\ halfmove_clock st' = 0 \/
+         is_capture_move st (Promotion from to) = false /\ halfmove_clock st' = S (halfmove_clock st))
+  | DrawOffer =>
+      halfmove_clock st' = halfmove_clock st
+  | _ => True
+  end.
+Proof.
+  intros st m st' Happly.
+  destruct m.
+  - unfold apply_move_impl in Happly.
+    destruct ((board st)[p]) as [pc|] eqn:Hfrom; [|discriminate].
+    injection Happly; intro; subst st'.
+    simpl.
+    unfold update_halfmove_clock, is_capture_move, is_baidaq_move.
+    simpl. rewrite Hfrom.
+    destruct ((board st)[p0]) as [target|] eqn:Htarget.
+    + left. split.
+      * left. reflexivity.
+      * reflexivity.
+    + destruct (PieceType_beq (piece_type pc) Baidaq) eqn:Hbaidaq.
+      * left. split.
+        -- right. reflexivity.
+        -- reflexivity.
+      * right. split.
+        -- split; reflexivity.
+        -- reflexivity.
+  - unfold apply_move_impl in Happly.
+    destruct ((board st)[p]) as [pc|] eqn:Hfrom; [|discriminate].
+    injection Happly; intro; subst st'.
+    simpl halfmove_clock.
+    unfold update_halfmove_clock, is_baidaq_move, is_capture_move.
+    simpl. rewrite Hfrom.
+    destruct (PieceType_beq (piece_type pc) Baidaq) eqn:Hbaidaq.
+    + left. split.
+      * reflexivity.
+      * destruct ((board st)[p0]); reflexivity.
+    + right. split.
+      * reflexivity.
+      * destruct ((board st)[p0]) eqn:Htarget.
+        -- left. split; reflexivity.
+        -- right. split; reflexivity.
+  - unfold apply_move_impl in Happly. discriminate.
+  - unfold apply_move_impl in Happly.
+    injection Happly; intro; subst st'.
+    simpl. reflexivity.
+  - unfold apply_move_impl in Happly. discriminate.
+Qed.
+
+Example halfmove_clock_progression_capture_resets :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank4 fileE) then Some white_rukh
+    else if position_beq pos (mkPosition rank4 fileH) then Some black_faras
+    else if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else None in
+  let st := mkGameState b White 75 40 false in
+  let capture_move := Normal (mkPosition rank4 fileE) (mkPosition rank4 fileH) in
+  exists st',
+    apply_move_impl st capture_move = Some st' /\
+    halfmove_clock st = 75 /\
+    is_capture_move st capture_move = true /\
+    halfmove_clock st' = 0.
+Proof.
+  eexists. split; [|split; [|split]].
+  - compute. reflexivity.
+  - reflexivity.
+  - compute. reflexivity.
+  - compute. reflexivity.
+Qed.
+
+Definition game_termination_measure (st: GameState) : nat :=
+  (max_halfmove_clock - halfmove_clock st) + 
+  (max_halfmove_clock * total_piece_count (board st)).
+
 (** * End of Section 15: Game Tree Properties *)
