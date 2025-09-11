@@ -10167,6 +10167,25 @@ Proof.
       * compute. reflexivity.
 Qed.
 
+(** * 15.16 Finite Game Properties *)
+
+(** Maximum pieces at game start *)
+Definition max_pieces : nat := 32.
+
+(** Count all pieces on board *)
+Definition total_piece_count (b: Board) : nat :=
+  List.length (List.filter (fun pos => negb (empty b pos)) enum_position).
+
+(** Initial board has exactly 32 pieces *)
+Lemma initial_board_piece_count :
+  total_piece_count standard_initial_board = 32.
+Proof.
+  compute. reflexivity.
+Qed.
+
+(** Maximum halfmove clock value *)
+Definition max_halfmove_clock : nat := 140. (* 70-move rule *)
+
 (** Example: Rukh capture resets the 70-move clock *)
 Example rukh_capture_resets_clock :
   let b := fun pos =>
