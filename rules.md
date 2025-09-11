@@ -97,7 +97,7 @@ b. deliberately touches a Baidaq that has reached the promotion rank, promotion 
 **5.5** The game is drawn when:
 a. Both players achieve bare king simultaneously
 b. The same position has occurred three times with the same player to move
-c. Both players have made 50 consecutive moves without any capture or Baidaq move
+c. Both players have made 70 consecutive moves without any capture or Baidaq move
 d. The position is such that neither player can possibly give checkmate or achieve bare king
 e. The players agree to a draw
 
@@ -153,7 +153,7 @@ a. is about to appear, if he first writes his move on his scoresheet and declare
 b. has just appeared, and the player claiming the draw has the move
 
 **9.3** The game is drawn, upon a correct claim by the player having the move, if:
-a. the last 50 moves have been completed by each player without any Baidaq move and without any capture, or
+a. the last 70 moves have been completed by each player without any Baidaq move and without any capture, or
 b. both players have only their Shahs remaining on the board
 
 ### Article 10: Quickplay Finish
