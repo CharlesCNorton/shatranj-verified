@@ -9470,4 +9470,76 @@ Proof.
   compute. reflexivity.
 Qed.
 
+(** * 15.6 Main Well-Formedness Preservation Theorem *)
+
+(** Helper: Normal moves (non-promotion, non-Shah) preserve Shah count *)
+Lemma normal_move_preserves_shah_count : forall b from to c,
+  from <> to ->
+  (forall pc, b[from] = Some pc -> piece_type pc <> Shah) ->
+  (forall pc, b[to] = Some pc -> piece_type pc <> Shah) ->
+  shah_count (board_move b from to) c = shah_count b c.
+Proof.
+  intros b from to c Hneq Hfrom_not_shah Hto_not_shah.
+  destruct (b[from]) as [pc|] eqn:Hfrom.
+  - (* from has a piece *)
+    apply board_move_non_shah_preserves_count with pc.
+    + exact Hfrom.
+    + apply Hfrom_not_shah. reflexivity.
+    + exact Hto_not_shah.
+  - (* from is empty - board_move does nothing *)
+    unfold board_move. rewrite Hfrom.
+    reflexivity.
+Qed.
+
+(** Example: Moving a Rukh doesn't change Shah count *)
+Example rukh_move_preserves_shah_count_example :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else None in
+  let b' := board_move b (mkPosition rank1 fileA) (mkPosition rank5 fileA) in
+  shah_count b White = 1 /\
+  shah_count b Black = 1 /\
+  shah_count b' White = 1 /\
+  shah_count b' Black = 1.
+Proof.
+  simpl. split; [|split; [|split]]; reflexivity.
+Qed.
+
+(** Helper: Placing a Ferz where no Shah exists preserves Shah count *)
+Lemma promotion_preserves_shah_count : forall b pos pc c,
+  piece_type pc = Ferz ->
+  (forall old_pc, b[pos] = Some old_pc -> piece_type old_pc <> Shah) ->
+  shah_count (board_place b pos pc) c = shah_count b c.
+Proof.
+  intros b pos pc c' Hferz Hno_shah.
+  unfold shah_count, count_piece_type_on_board.
+  f_equal.
+  apply filter_ext.
+  intros p.
+  destruct (position_eq_dec pos p).
+  - (* At the promotion position *)
+    subst p.
+    unfold board_place. simpl.
+    destruct (position_eq_dec pos pos); [|contradiction].
+    unfold is_shah.
+    rewrite Hferz. simpl.
+    destruct (b[pos]) as [old_pc|] eqn:Hbpos.
+    + (* There was a piece at pos - not a Shah by hypothesis *)
+      assert (piece_type old_pc <> Shah) by (apply Hno_shah; reflexivity).
+      destruct (Color_beq (piece_color old_pc) c') eqn:Hcolor;
+      destruct (PieceType_beq (piece_type old_pc) Shah) eqn:Hshah.
+      * apply PieceType_beq_eq in Hshah. contradiction.
+      * destruct (Color_beq (piece_color pc) c'); reflexivity.
+      * apply PieceType_beq_eq in Hshah. contradiction.
+      * destruct (Color_beq (piece_color pc) c'); reflexivity.
+    + (* Empty position *)
+      destruct (Color_beq (piece_color pc) c'); simpl; reflexivity.
+  - (* Other positions unchanged *)
+    unfold board_place. simpl.
+    destruct (position_eq_dec pos p); [contradiction|].
+    reflexivity.
+Qed.
+
 (** * End of Section 15: Game Tree Properties *)
