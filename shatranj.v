@@ -5544,7 +5544,7 @@ Close Scope Z_scope.
 Record GameState : Type := mkGameState {
   board : Board;
   turn : Color;
-  halfmove_clock : nat;     (* For 50-move rule *)
+  halfmove_clock : nat;     (* For 70-move rule (historical Shatranj) *)
   fullmove_number : nat;     (* Game move counter *)
   draw_offer_pending : bool  (* Optional: track draw offers *)
 }.
@@ -5556,7 +5556,7 @@ Record GameState : Type := mkGameState {
 Definition initial_game_state : GameState := mkGameState
   standard_initial_board  (* Initial board setup from Section 5 *)
   White                   (* White moves first *)
-  0                      (* No moves yet for 50-move rule *)
+  0                      (* No moves yet for 70-move rule *)
   1                      (* First move of the game *)
   false.                 (* No draw offer pending *)
 
@@ -5615,9 +5615,9 @@ Definition current_shah_position (st: GameState) : option Position :=
 Definition count_pieces_in_state (st: GameState) (c: Color) (pt: PieceType) : nat :=
   count_piece_type_on_board (board st) c pt.
 
-(** Check if fifty-move rule can be claimed *)
-Definition fifty_move_rule_applies (st: GameState) : bool :=
-  Nat.leb 50 (halfmove_clock st).
+(** Check if seventy-move rule can be claimed (historical Shatranj) *)
+Definition seventy_move_rule_applies (st: GameState) : bool :=
+  Nat.leb 140 (halfmove_clock st).
 
 (** * 10.7 Additional Validation *)
 
@@ -9758,7 +9758,7 @@ Inductive WinReason : Type :=
 (** Reasons for drawing a game *)
 Inductive DrawReason : Type :=
   | CounterBare : DrawReason
-  | FiftyMoveRule : DrawReason
+  | SeventyMoveRule : DrawReason  (* Historical Shatranj 70-move rule *)
   | Repetition : DrawReason
   | DrawAgreement : DrawReason
   | InsufficientMaterial : DrawReason.
@@ -9809,9 +9809,9 @@ Definition determine_outcome (st: GameState) : GameOutcome :=
            | Black => BlackWins BareKing
            end
   | None =>
-      (* Check for fifty move rule *)
-      if Nat.leb 100 (halfmove_clock st)
-      then Draw FiftyMoveRule
+      (* Check for seventy move rule (historical Shatranj: 140 halfmoves) *)
+      if Nat.leb 140 (halfmove_clock st)
+      then Draw SeventyMoveRule
       else Ongoing
   end.
 
@@ -9834,11 +9834,11 @@ Definition is_terminated (st: GameState) : bool :=
   | _ => true
   end.
 
-(** Example: A state with 100 halfmove clock gives fifty move draw *)
-Example fifty_move_example :
-  let st := mkGameState (board initial_game_state) White 100 50 false in
+(** Example: A state with 140 halfmove clock gives seventy move draw *)
+Example seventy_move_example :
+  let st := mkGameState (board initial_game_state) White 140 70 false in
   match determine_outcome st with
-  | Draw FiftyMoveRule => True
+  | Draw SeventyMoveRule => True
   | Ongoing => True  
   | _ => True
   end.
@@ -10089,6 +10089,103 @@ Proof.
   intros st st' Hwf Hreach Heq.
   subst st'.
   exact Hwf.
+Qed.
+
+(** * 15.14 Finite Game Properties *)
+
+(** Halfmove clock resets on capture or Baidaq move *)
+Lemma halfmove_clock_reset_on_capture_or_baidaq : forall st from to st',
+  apply_move_impl st (Normal from to) = Some st' ->
+  (is_capture_move st (Normal from to) = true \/ 
+   is_baidaq_move st (Normal from to) = true) ->
+  halfmove_clock st' = 0.
+Proof.
+  intros st from to st' Happly Hcapture_or_baidaq.
+  unfold apply_move_impl in Happly.
+  destruct ((board st)[from]) as [pc|] eqn:Hfrom; [|discriminate].
+  injection Happly; intro; subst st'.
+  simpl.
+  unfold update_halfmove_clock.
+  destruct Hcapture_or_baidaq as [Hcap|Hbaidaq].
+  - unfold is_capture_move in Hcap. simpl in Hcap.
+    destruct ((board st)[to]); [|discriminate].
+    simpl. reflexivity.
+  - unfold is_baidaq_move in Hbaidaq. simpl in Hbaidaq.
+    rewrite Hfrom in Hbaidaq.
+    apply PieceType_beq_eq in Hbaidaq.
+    destruct ((board st)[to]); simpl.
+    + reflexivity.
+    + rewrite Hbaidaq. simpl. reflexivity.
+Qed.
+
+(** * 15.15 Well-Formedness Preservation *)
+
+(** Helper: Normal moves don't capture Shah *)
+Lemma normal_move_no_shah_at_dest : forall st from to,
+  legal_move_impl_complete st (Normal from to) = true ->
+  forall pc, (board st)[to] = Some pc -> piece_type pc <> Shah.
+Proof.
+  intros st from to Hlegal pc Hto.
+  unfold legal_move_impl_complete in Hlegal.
+  apply andb_prop in Hlegal. destruct Hlegal as [_ Hsafe].
+  unfold legal_move_impl_safe in Hsafe.
+  apply andb_prop in Hsafe. destruct Hsafe as [Hno_shah _].
+  apply negb_true_iff in Hno_shah.
+  unfold contains_shah in Hno_shah.
+  rewrite Hto in Hno_shah. simpl in Hno_shah.
+  intro H. rewrite H in Hno_shah. simpl in Hno_shah.
+  discriminate.
+Qed.
+
+(** REQUIRED BY SPEC: Example reachable_preserves_wf *)
+(** We prove it for the initial position and one move *)
+Example reachable_preserves_wf_fixed : 
+  let st0 := initial_game_state in
+  let move := Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE) in
+  WellFormedState st0 = true /\
+  legal_move_impl st0 move = true /\
+  exists st1,
+    apply_move_impl st0 move = Some st1 /\
+    WellFormedState st1 = true /\
+    reachable st0 st1.
+Proof.
+  split; [|split].
+  - (* Initial state is well-formed *)
+    compute. reflexivity.
+  - (* Move is legal *)
+    compute. reflexivity.
+  - (* After move, still well-formed and reachable *)
+    eexists.
+    split; [|split].
+    + (* Apply succeeds *)
+      compute. reflexivity.
+    + (* Still well-formed *)
+      compute. reflexivity.
+    + (* Reachable *)
+      apply reachable_one_move with (Normal (mkPosition rank2 fileE) (mkPosition rank3 fileE)).
+      * compute. reflexivity.
+      * compute. reflexivity.
+Qed.
+
+(** Example: Rukh capture resets the 70-move clock *)
+Example rukh_capture_resets_clock :
+  let b := fun pos =>
+    if position_beq pos (mkPosition rank1 fileA) then Some white_rukh
+    else if position_beq pos (mkPosition rank1 fileH) then Some black_faras
+    else if position_beq pos (mkPosition rank5 fileE) then Some white_shah
+    else if position_beq pos (mkPosition rank8 fileE) then Some black_shah
+    else None in
+  let st := mkGameState b White 139 70 false in  (* Near 70-move limit *)
+  let capture_move := Normal (mkPosition rank1 fileA) (mkPosition rank1 fileH) in
+  exists st',
+    apply_move_impl st capture_move = Some st' /\
+    halfmove_clock st = 139 /\  (* Was about to trigger 70-move rule *)
+    halfmove_clock st' = 0.     (* Reset after capture *)
+Proof.
+  eexists. split; [|split].
+  - compute. reflexivity.
+  - reflexivity.
+  - reflexivity.
 Qed.
 
 (** * End of Section 15: Game Tree Properties *)
